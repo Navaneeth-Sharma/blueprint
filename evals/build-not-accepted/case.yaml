@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: build-not-accepted
+tags: [build]
+runs: 1
+context:
+  scaffold_script: setup.sh
+execution:
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
+  prompt: |
+    /blueprint:blueprint build

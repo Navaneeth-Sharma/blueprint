@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADR-0001 Multi-user todo web app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0001 · multi-user-web</span>
+    <h1>Multi-user todo web app</h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>1<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill info">Exploring</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>A</dd></div>
+    <div><dt>Repo</dt><dd>todo</dd></div>
+    <div><dt>Published</dt><dd>not yet</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="now"><span>Explore</span><small>9 questions waiting</small></li>
+    <li><span>Decide</span><small>ADR after answers</small></li>
+    <li><span>Build</span><small>not started</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd><code>todo</code> is a one-person CLI that rewrites a single JSON file on every command. You want it to become a web app where several people have accounts, share lists, and get an email when something is due.</dd></div>
+    <div><dt>Why now</dt><dd>You asked for it. The JSON store has no locking (<a class="id" href="#F1">F1</a>), so a web server would lose writes as soon as two requests overlap. The storage change comes first whatever else is decided.</dd></div>
+    <div><dt>Leaning</dt><dd>Flask and SQLite on one small VM (<a class="id" href="#O2">O2</a>). Sign-in by emailed link. Lists shared by email address. One daily digest email sent by a cron job running <code>todo remind</code> over plain SMTP. Split into three records, one per shippable release (<a class="id" href="#Q1">Q1</a>).</dd></div>
+  </dl>
+</section>
+
+<section id="micro-features">
+  <h2>Micro features</h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt">SQLite store. One database file replaces <code>~/.todo.store</code>, with tables users, lists, list_members and items. The CLI keeps <code>add</code>, <code>list</code> and <code>done</code> on top of it, and a new <code>todo import</code> copies an old JSON file in.</p><p class="meta">depends on — · size M</p></div></li>
+    <li id="M2"><span class="id">M2</span><div><p class="stmt">Web UI for one list. Server-rendered pages to see, add and complete items in a browser. Forms use POST, then redirect back to the list.</p><p class="meta">depends on M1 · size M</p></div></li>
+    <li id="M3"><span class="id">M3</span><div><p class="stmt">Accounts. Sign in (method per <a class="id" href="#Q4">Q4</a>), a session cookie, and sign out. Every list belongs to a user, and anyone else gets a 404.</p><p class="meta">depends on M2 · size M (L with passwords)</p></div></li>
+    <li id="M4"><span class="id">M4</span><div><p class="stmt">Shared lists. A user can have several lists and share one with an email address. Members add and complete items. Only the owner deletes the list or removes members.</p><p class="meta">depends on M3 · size M</p></div></li>
+    <li id="M5"><span class="id">M5</span><div><p class="stmt">Due dates. An optional due date on each item, set with a date input on the web or <code>--due</code> in the CLI. Items are shown as due today or overdue in the viewer's time zone.</p><p class="meta">depends on M1 (M2 for the UI) · size S</p></div></li>
+    <li id="M6"><span class="id">M6</span><div><p class="stmt">Email reminders. <code>todo remind</code>, run by cron, sends each user at most one digest a day of their undone items that are due or overdue. Safe to run twice, and logs one line per run.</p><p class="meta">depends on M4 M5 · size M</p></div></li>
+  </ol>
+</section>
+
+<section id="current-state">
+  <h2>Current state</h2>
+  <figure class="arch">
+    <div class="tier" data-tier="User">
+      <div class="node ext">Shell user<small>one person, one machine</small></div>
+    </div>
+    <div class="link">python3 -m todo add | list | done</div>
+    <div class="tier" data-tier="App">
+      <div class="node">CLI<small>todo/cli.py · argparse, 35 lines</small></div>
+      <span class="hl both">load() / save()</span>
+      <div class="node">Store<small>todo/store.py · json, 17 lines</small></div>
+    </div>
+    <div class="link">read the whole file, rewrite the whole file</div>
+    <div class="tier" data-tier="Data">
+      <div class="node">~/.todo.store<small>JSON list of {id, title, done} · or $TODO_FILE</small></div>
+    </div>
+    <figcaption>
+      <div class="legend"><span><i></i>unchanged</span><span><i class="ext"></i>external</span></div>
+      Today there is no network, no users and no dates, and nothing else in the repo besides two tests.
+    </figcaption>
+  </figure>
+  <figure class="seq" style="--n:4">
+    <div class="seq-actors">
+      <b>Shell user<small>external</small></b><b>cli.py</b><b>store.py</b><b>~/.todo.store</b>
+    </div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1"><code>python3 -m todo add "buy milk"</code></div>
+      <div class="msg" style="--from:1;--to:2">load()</div>
+      <div class="msg" style="--from:2;--to:3">read_text() · whole file</div>
+      <div class="msg reply" style="--from:3;--to:1">list of items</div>
+      <div class="msg self" style="--from:1">next_id = max(id) + 1</div>
+      <div class="msg" style="--from:1;--to:2">save(items)</div>
+      <div class="msg" style="--from:2;--to:3">write_text() · whole list</div>
+      <div class="seq-note" style="--from:1;--to:3">No lock between load and save. Two writers at once means the last one wins (<a class="id" href="#F1">F1</a>).</div>
+      <div class="msg reply" style="--from:1;--to:0">prints <code>1</code> · exit 0</div>
+      <div class="seq-frag" data-label="alt · todo done 9, and no item 9 exists">
+        <div class="msg reply" style="--from:1;--to:0">stderr <code>no todo 9</code> · exit 1</div>
+      </div>
+    </div>
+    <figcaption>Today's <code>add</code> flow is S1–S8, and the unknown-id branch of <code>done</code> is S9. <code>list</code> runs S2–S4 and then prints.</figcaption>
+  </figure>
+</section>
+
+<section id="findings">
+  <h2>Findings</h2>
+  <ol class="ledger">
+    <li id="F1"><span class="id">F1</span><div><p>The store reads the whole JSON file and writes the whole list back on every write, with no lock and no atomic rename. A crash during <code>write_text</code> can leave a truncated file, and two concurrent writers lose one update.</p><cite>todo/store.py:11-17 · high confidence</cite></div></li>
+    <li id="F2"><span class="id">F2</span><div><p>An item is <code>{id, title, done}</code>, and ids are <code>max(id) + 1</code>. There is no owner, list, due date or delete command, and titles are not validated (an empty string is accepted).</p><cite>todo/cli.py:11-19 · high confidence</cite></div></li>
+    <li id="F3"><span class="id">F3</span><div><p>All the logic lives inside <code>main()</code>, mixed with <code>print</code>. A web layer can't reuse <code>add</code>, <code>done</code> or <code>list</code> until they are pulled out into store functions.</p><cite>todo/cli.py:16-35 · high confidence</cite></div></li>
+    <li id="F4"><span class="id">F4</span><div><p>There are two <code>unittest</code> tests that drive <code>cli.main</code> against a temporary <code>TODO_FILE</code>. Both pass today (<code>Ran 2 tests … OK</code>). They are the regression net for keeping the CLI working.</p><cite>tests/test_cli.py:10-35 · ran 2026-10-01 · high confidence</cite></div></li>
+    <li id="F5"><span class="id">F5</span><div><p>The project has no packaging and no dependencies (no <code>pyproject.toml</code> or <code>requirements.txt</code>). Locally: Python 3.12.10, SQLite 3.49.1, <code>sqlite3.threadsafety == 3</code>, <code>hashlib.scrypt</code> available on OpenSSL 3.0.16, and Flask not installed.</p><cite>git ls-files · local python3 check · high confidence</cite></div></li>
+    <li id="F6"><span class="id">F6</span><div><p>Both stdlib servers carry a production warning: <code>http.server</code> "is not recommended for production", and <code>wsgiref</code> "is a reference implementation and is not recommended for production". The <code>cgi</code> module was removed in 3.13, so form parsing falls to <code>urllib.parse</code>.</p><cite><a href="https://docs.python.org/3/library/http.server.html">http.server</a> · <a href="https://docs.python.org/3/library/wsgiref.html">wsgiref</a> · <a href="https://peps.python.org/pep-0594/">PEP 594</a> · high confidence</cite></div></li>
+    <li id="F7"><span class="id">F7</span><div><p>In WAL mode, SQLite readers and the writer don't block each other, but "there can only be one writer at a time". Python's <code>sqlite3.connect(timeout=5.0)</code> is the busy wait. Connections are tied to their thread by default (<code>check_same_thread=True</code>), so the web app should open one connection per request.</p><cite><a href="https://sqlite.org/wal.html">sqlite.org/wal</a> · <a href="https://docs.python.org/3/library/sqlite3.html">sqlite3 docs</a> · high confidence</cite></div></li>
+    <li id="F8"><span class="id">F8</span><div><p>Flask 3.1.3 (2026-02-18) needs Python 3.9 or later and pulls in Werkzeug, Jinja2, MarkupSafe, itsdangerous, click and blinker. Its session cookie is signed, not encrypted, and Flask has no built-in CSRF protection.</p><cite><a href="https://pypi.org/project/Flask/">PyPI Flask</a> · <a href="https://flask.palletsprojects.com/en/stable/web-security/">Flask security docs</a> · high confidence (medium on "no CSRF")</cite></div></li>
+    <li id="F9"><span class="id">F9</span><div><p>If we store passwords (<a class="id" href="#Q4">Q4</a> B or C), OWASP ranks Argon2id first and scrypt second. The minimum for scrypt is N=2<sup>17</sup>, r=8, p=1, and for PBKDF2-HMAC-SHA256 it is 600,000 iterations. <code>hashlib.scrypt</code> is in the stdlib on every supported Python.</p><cite><a href="https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html">OWASP Password Storage</a> · high confidence</cite></div></li>
+    <li id="F10"><span class="id">F10</span><div><p>OWASP treats SameSite as defence in depth, not a replacement for a CSRF token. Use a synchronizer token (or a signed double-submit cookie), and never change state on a GET, which Lax does not cover. The recommended cookie is <code>__Host-</code> prefixed, <code>Secure</code> and <code>HttpOnly</code>.</p><cite><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">OWASP CSRF</a> · <a href="https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html">OWASP Sessions</a> · high confidence</cite></div></li>
+    <li id="F11"><span class="id">F11</span><div><p><code>smtplib</code> and <code>EmailMessage</code> are stdlib, and RFC 8314 prefers implicit TLS on port 465. Postmark, SES, Resend and Mailgun all offer SMTP relay as well as an HTTP API. Gmail requires SPF or DKIM from every sender, and DMARC plus one-click unsubscribe above 5,000 messages a day (the unsubscribe rule is for "marketing and subscribed" mail).</p><cite><a href="https://www.rfc-editor.org/rfc/rfc8314">RFC 8314</a> · <a href="https://resend.com/docs/send-with-smtp">Resend SMTP</a> · <a href="https://support.google.com/a/answer/81126">Gmail sender rules</a> · high confidence (medium on whether reminders count as "subscribed")</cite></div></li>
+    <li id="F12"><span class="id">F12</span><div><p><code>zoneinfo</code> has been in the stdlib since 3.9 (Windows also needs the <code>tzdata</code> package). cron's DST handling is only defined for jobs at a fixed time. A job that runs every 15 minutes and computes each user's local date itself sidesteps that.</p><cite><a href="https://docs.python.org/3/library/zoneinfo.html">zoneinfo</a> · <a href="https://man7.org/linux/man-pages/man8/cron.8.html">cron(8)</a> · high confidence</cite></div></li>
+    <li id="F13"><span class="id">F13</span><div><p>A scheduler inside the web process runs once per worker. The APScheduler FAQ warns that sharing jobs across processes leads to "duplicate execution or… missing jobs". An external cron with a database uniqueness key avoids both.</p><cite><a href="https://apscheduler.readthedocs.io/en/3.x/faq.html">APScheduler FAQ</a> · high confidence (medium that it applies to plain thread loops)</cite></div></li>
+  </ol>
+</section>
+
+<section id="options">
+  <h2>Options</h2>
+  <div class="options">
+    <article class="option" id="O1">
+      <header><span class="id">O1</span><h3>Stdlib only</h3><span class="pill">considered</span></header>
+      <ul class="pros"><li>Zero dependencies, same as today (<a class="id" href="#F5">F5</a>)</li><li>WSGI app plus <code>sqlite3</code>, <code>hashlib.scrypt</code>, <code>smtplib</code> and <code>zoneinfo</code>, all built in</li></ul>
+      <ul class="cons"><li>We would hand-roll routing, HTML escaping, sessions and CSRF, all of it at the trust boundary</li><li>The stdlib servers are not for production (<a class="id" href="#F6">F6</a>), so a server such as waitress is needed anyway</li></ul>
+      <footer><span>Effort <b>M</b></span><span>Risk <b>medium</b></span></footer>
+    </article>
+    <article class="option pick" id="O2">
+      <header><span class="id">O2</span><h3>Flask + sqlite3 + cron</h3><span class="pill info">leaning</span></header>
+      <ul class="pros"><li>Jinja autoescaping and signed session cookies come built in</li><li><code>store.py</code> stays the data layer for both the CLI and the web (<a class="id" href="#F3">F3</a>)</li><li>Reminders are one more CLI command that cron runs</li></ul>
+      <ul class="cons"><li>First dependency, and it needs packaging</li><li>CSRF tokens and schema migrations are ours to write (about 30 lines)</li></ul>
+      <footer><span>Effort <b>M</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+    <article class="option" id="O3">
+      <header><span class="id">O3</span><h3>Django</h3><span class="pill">considered</span></header>
+      <ul class="pros"><li>Auth, sessions, CSRF, migrations, admin and <code>send_mail</code> all come built in</li><li>The least security code we write ourselves</li></ul>
+      <ul class="cons"><li>Rewrites <code>store.py</code> as ORM models, and the CLI becomes <code>manage.py</code> commands</li><li>The project skeleton alone is bigger than today's app</li></ul>
+      <footer><span>Effort <b>M</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+  </div>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <p class="callout"><b>Early cases</b>Expected results assume the recommended answers. The ADR will restate them once the Q# are settled.</p>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>M#</th><th>Scenario</th><th>Expected behaviour</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td>M1</td><td><b>First run, no database</b></td><td><code>todo list</code> creates <code>todo.db</code> with the schema (<code>PRAGMA user_version = 1</code>), prints nothing, exits 0.</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td>M1</td><td><b>Import an old store</b><br>3 items, one done, one titled <code>café ☕</code>.</td><td><code>todo import --user a@x.io ~/.todo.store</code> prints <code>imported 3</code>. The rows keep the done flag and the exact title bytes, and go into that user's first list.</td><td><a class="id" href="#Q8">Q8</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td>M1</td><td><b>Import run twice</b></td><td>Second run prints <code>already imported</code>, exits 0, and adds 0 rows.</td><td><a class="id" href="#Q8">Q8</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td>M1</td><td><b>Import of broken JSON or a missing file</b></td><td>Exits 1 with <code>cannot read &lt;path&gt;: …</code>. The whole import runs in one transaction, so the database is unchanged.</td><td>ADR</td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td>M1</td><td><b>Two writers at once</b><br>A web request and <code>todo remind</code>.</td><td>No lost update. The second writer waits up to <code>busy_timeout</code> 5000 ms; after that the web returns 503 and the CLI exits 1 with <code>database is busy</code>.</td><td><a class="id" href="#F7">F7</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td>M2</td><td><b>Empty or whitespace-only title</b></td><td>Web: 400 and the form shows <code>Title can't be empty</code>. CLI: exit 2 with the same message. No row is written (today the CLI accepts it, <a class="id" href="#F2">F2</a>).</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E7"><td><span class="id">E7</span></td><td>M2</td><td><b>Title of 501+ characters, or HTML in the title</b></td><td>Over 500 characters: 400 <code>Title is too long (max 500)</code>. A title such as <code>&lt;script&gt;</code> is stored as typed and rendered escaped as <code>&amp;lt;script&amp;gt;</code>.</td><td><a class="id" href="#Q3">Q3</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E8"><td><span class="id">E8</span></td><td>M2</td><td><b>Done submitted twice</b><br>Double click, or refresh after the POST.</td><td>Both POSTs return 303 to the list and the item stays done. The page after the redirect is a GET, so a refresh sends nothing.</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E9"><td><span class="id">E9</span></td><td>M3</td><td><b>Signed out, or an unsafe <code>next</code></b></td><td>Any page except sign-in returns 303 to <code>/login?next=/lists/7</code>. A <code>next</code> that isn't a relative path (such as <code>https://evil.io</code>) is ignored and sends the user to <code>/</code>.</td><td>ADR</td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E10"><td><span class="id">E10</span></td><td>M3</td><td><b>Same email, different spelling</b><br><code>" Alice@Example.COM "</code></td><td>Trimmed and lowercased to <code>alice@example.com</code>, so it is the same account. <code>UNIQUE(email)</code> backs this up. An input like <code>alice</code> gets 400 <code>Enter a valid email</code>.</td><td>ADR</td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E11"><td><span class="id">E11</span></td><td>M3</td><td><b>Sign-in link expired, reused or prefetched</b></td><td>Links older than 15 minutes, or already used, show <code>This link has expired</code> with a 400 and create no session. A GET only shows a <i>Sign in</i> button and the POST consumes the token, so a mail scanner's prefetch is harmless.</td><td><a class="id" href="#Q4">Q4</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E12"><td><span class="id">E12</span></td><td>M3</td><td><b>Sign-in link flood, or probing which emails exist</b></td><td>More than 5 requests per email per hour gets 429 and no email is sent. Allowed and unknown emails both see the same <code>Check your email</code> page.</td><td><a class="id" href="#Q4">Q4</a> <a class="id" href="#Q9">Q9</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E13"><td><span class="id">E13</span></td><td>M3</td><td><b>Cookie and CSRF</b></td><td>The cookie is <code>__Host-session; HttpOnly; Secure; SameSite=Lax</code> and lasts 30 days. Signing out deletes the server-side session. A POST without a valid CSRF token gets 400, and no GET changes state.</td><td><a class="id" href="#F10">F10</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E14"><td><span class="id">E14</span></td><td>M3</td><td><b>Touching another user's item</b><br><code>POST /items/42/done</code> on a list you aren't a member of.</td><td>404, not 403, so the item's existence doesn't leak. The row is unchanged, and a warning is logged with the user id and item id.</td><td>ADR</td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E15"><td><span class="id">E15</span></td><td>M4</td><td><b>Share with an email that has no account</b></td><td>Stored as a membership by email and no email is sent. The list appears the first time that address signs in. The response is the same whether or not the account exists.</td><td><a class="id" href="#Q5">Q5</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E16"><td><span class="id">E16</span></td><td>M4</td><td><b>Share with yourself or an existing member</b></td><td>No-op with the message <code>already a member</code>. <code>UNIQUE(list_id, email)</code> backs this up.</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E17"><td><span class="id">E17</span></td><td>M4</td><td><b>Member removed mid-session</b></td><td>Their next POST on that list gets 404, and the list's items drop out of their next digest.</td><td><a class="id" href="#Q5">Q5</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E18"><td><span class="id">E18</span></td><td>M4</td><td><b>A non-owner tries owner actions, or the owner deletes the list</b></td><td>A member who deletes the list or removes someone gets 403. When the owner deletes, the items and memberships go with it (<code>ON DELETE CASCADE</code>), and members get 404.</td><td><a class="id" href="#Q5">Q5</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E19"><td><span class="id">E19</span></td><td>M4</td><td><b>Two members complete the same item at once</b></td><td>Both get 303 and the item is done once. <code>UPDATE … SET done = 1</code> is idempotent.</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E20"><td><span class="id">E20</span></td><td>M5</td><td><b>Bad, empty or past due date</b></td><td><code>2026-02-30</code> gets 400 <code>Not a valid date</code>. An empty value means no due date. A past date is allowed and shown as overdue.</td><td>ADR</td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E21"><td><span class="id">E21</span></td><td>M5</td><td><b>"Today" depends on where you are</b><br>Due <code>2026-10-05</code>, viewer in <code>Asia/Kolkata</code> at 2026-10-04 19:00 UTC.</td><td>Shown as <i>due today</i>, because it is 00:30 on 5 October IST. A viewer in UTC sees <i>due tomorrow</i>. An unknown time zone falls back to UTC.</td><td><a class="id" href="#F12">F12</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E22"><td><span class="id">E22</span></td><td>M5</td><td><b>Existing rows and old CLI usage</b></td><td>Migrated items have <code>due = NULL</code>. <code>todo add "x"</code> without <code>--due</code> still works, and <code>todo list</code> shows a blank due column for them.</td><td><a class="id" href="#Q8">Q8</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E23"><td><span class="id">E23</span></td><td>M6</td><td><b>Normal digest</b><br>2 items due today and 1 overdue, across an owned list and a shared one.</td><td>After 08:00 local time, one email with the subject <code>3 todos due</code> lists all three, grouped by list. A <code>(user, local date)</code> row records the send.</td><td><a class="id" href="#Q6">Q6</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E24"><td><span class="id">E24</span></td><td>M6</td><td><b>Overlapping or repeated runs</b><br>Two cron runs in the same minute.</td><td>Exactly one email per user per local day. <code>INSERT OR IGNORE</code> on <code>UNIQUE(user_id, local_date)</code> picks the sender.</td><td><a class="id" href="#Q2">Q2</a> <a class="id" href="#F13">F13</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E25"><td><span class="id">E25</span></td><td>M6</td><td><b>SMTP down or slow</b></td><td>A 10 s connect timeout. That user's claim is released, the run exits 1 after trying everyone, and the next run retries. The user gets the email late, not twice.</td><td><a class="id" href="#Q7">Q7</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E26"><td><span class="id">E26</span></td><td>M6</td><td><b>Nothing due, opted out, or unverified</b></td><td>No email in all three cases. An empty digest is never sent. Opted-out users are counted as <code>skipped</code>. With sign-in by link, every address that can receive a digest has already proven it reads that inbox.</td><td><a class="id" href="#Q4">Q4</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E27"><td><span class="id">E27</span></td><td>M6</td><td><b>Missed runs and DST</b><br>Server down 07:00–11:00, and the 2026-11-01 fall-back in <code>America/New_York</code>.</td><td>The 11:00 run sends today's digest late. A day missed entirely is not sent the next day. The fall-back day sends exactly one digest, because the key is the local date and not the hour.</td><td><a class="id" href="#F12">F12</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E28"><td><span class="id">E28</span></td><td>M6</td><td><b>Header injection and unsubscribe</b><br>A title containing <code>\r\nBcc: x@evil.io</code>.</td><td>Titles only go in the body, and the subject is fixed text, so no header can be injected. Every email ends with a link to turn reminders off.</td><td><a class="id" href="#F11">F11</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E29"><td><span class="id">E29</span></td><td>M6</td><td><b>Knowing it broke</b></td><td>Each run logs one line: <code>remind users=12 sent=3 skipped=9 failed=0 took=0.4s</code>. Any failure exits 1, so cron mails the admin. A missing log line for a whole day means cron stopped.</td><td>ADR</td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="risks">
+  <h2>Risks and unknowns</h2>
+  <div class="callout risk"><b>Risk</b><p>The whole security surface is new: sessions, CSRF, output escaping, and sending email to addresses users type in. Framework defaults matter more here than line count, which is why the leaning is not stdlib only.</p></div>
+  <div class="callout risk"><b>Risk</b><p>Deliverability. Without SPF, DKIM and DMARC on the sending domain, Gmail and Yahoo will send reminders to spam or reject them (<a class="id" href="#F11">F11</a>). This needs a domain you control plus an SMTP account. <b>Unknown:</b> do you have both?</p></div>
+  <div class="callout risk"><b>Risk</b><p>Sign-in links. Corporate mail scanners open links in emails. If a GET consumed the token, those users could never sign in, so the token has to be consumed on a POST (<a class="id" href="#E11">E11</a>). This is a known pattern; I couldn't check a source for it in this session.</p></div>
+  <div class="callout risk"><b>Unknown</b><p>How many users? The leaning assumes tens of users on one box, where SQLite's one-writer-at-a-time limit never matters (<a class="id" href="#F7">F7</a>). A public service with thousands of users changes <a class="id" href="#Q2">Q2</a> and <a class="id" href="#Q9">Q9</a>.</p></div>
+  <div class="callout risk"><b>Risk</b><p>On a single box, the SQLite file is the entire state. The ADR needs a nightly <code>sqlite3 todo.db ".backup …"</code> and a restore that has been tested.</p></div>
+</section>
+
+<section id="questions">
+  <h2>Questions for you</h2>
+  <fieldset class="q" id="Q1">
+    <legend><span class="id">Q1</span>One record, or split it?</legend>
+    <p class="why">There are six micro features. Each release below is usable on its own, and the email decisions shouldn't hold up M1.</p>
+    <label><input type="radio" name="Q1" id="Q1-A" checked> A. Three records, one per release: M1–M3 (a web app with accounts), M4 (sharing), M5–M6 (due dates and reminders) <em>recommended</em></label>
+    <label><input type="radio" name="Q1" id="Q1-B"> B. Six records, one per micro feature</label>
+    <label><input type="radio" name="Q1" id="Q1-C"> C. Keep one record for all six</label>
+    <textarea id="Q1-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q2">
+    <legend><span class="id">Q2</span>Where will it run?</legend>
+    <p class="why">This decides the database and the scheduler. SQLite and cron both assume one machine with a persistent disk.</p>
+    <label><input type="radio" name="Q2" id="Q2-A" checked> A. One small VM or VPS: SQLite file, cron, and systemd for the web process <em>recommended</em></label>
+    <label><input type="radio" name="Q2" id="Q2-B"> B. A PaaS with an ephemeral disk (Render, Fly, Heroku): Postgres and the platform's scheduler</label>
+    <label><input type="radio" name="Q2" id="Q2-C"> C. Only on a home network or localhost</label>
+    <textarea id="Q2-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q3">
+    <legend><span class="id">Q3</span>Which web stack?</legend>
+    <p class="why">This sets how much security plumbing (escaping, sessions, CSRF) we write ourselves (<a class="id" href="#O1">O1</a>–<a class="id" href="#O3">O3</a>, <a class="id" href="#F8">F8</a>).</p>
+    <label><input type="radio" name="Q3" id="Q3-A" checked> A. Flask, with <code>store.py</code> on <code>sqlite3</code> kept as the data layer <em>recommended</em></label>
+    <label><input type="radio" name="Q3" id="Q3-B"> B. Stdlib only, zero dependencies</label>
+    <label><input type="radio" name="Q3" id="Q3-C"> C. Django</label>
+    <textarea id="Q3-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q4">
+    <legend><span class="id">Q4</span>How do people sign in?</legend>
+    <p class="why">Emailed links replace three flows (password storage, reset and email verification) with one, but every sign-in waits on email.</p>
+    <label><input type="radio" name="Q4" id="Q4-A" checked> A. Emailed sign-in link, no passwords, with a 30-day session <em>recommended</em></label>
+    <label><input type="radio" name="Q4" id="Q4-B"> B. Email and password, with a verification email and password reset by email</label>
+    <label><input type="radio" name="Q4" id="Q4-C"> C. Email and password, with no verification and resets done by an admin through the CLI</label>
+    <textarea id="Q4-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q5">
+    <legend><span class="id">Q5</span>How does sharing work?</legend>
+    <p class="why">This decides whether sharing sends email (a spam vector) and whether it reveals which addresses have accounts.</p>
+    <label><input type="radio" name="Q5" id="Q5-A" checked> A. The owner adds an email address, and that person sees the list the next time they sign in. No invite email is sent, and members can add and complete items. <em>recommended</em></label>
+    <label><input type="radio" name="Q5" id="Q5-B"> B. Same as A, plus an invite email to the address</label>
+    <label><input type="radio" name="Q5" id="Q5-C"> C. Roles (viewer and editor), shared with existing accounts only</label>
+    <textarea id="Q5-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q6">
+    <legend><span class="id">Q6</span>What does a reminder look like?</legend>
+    <p class="why">This sets the email volume, whether due dates need a time, and how simple it is to guarantee no duplicates.</p>
+    <label><input type="radio" name="Q6" id="Q6-A" checked> A. One digest a day per user at 08:00 local time, covering items due today or overdue across every list they belong to <em>recommended</em></label>
+    <label><input type="radio" name="Q6" id="Q6-B"> B. One email per item at 09:00 local time on its due date, sent to every member</label>
+    <label><input type="radio" name="Q6" id="Q6-C"> C. Due date and time on each item, with an email N minutes before</label>
+    <textarea id="Q6-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q7">
+    <legend><span class="id">Q7</span>How is email sent?</legend>
+    <p class="why">This is the one outside dependency on the path of both sign-in and reminders. Every listed provider accepts SMTP (<a class="id" href="#F11">F11</a>).</p>
+    <label><input type="radio" name="Q7" id="Q7-A" checked> A. Stdlib <code>smtplib</code> to any provider's SMTP relay, configured by <code>SMTP_*</code> environment variables. In development, emails are printed to stdout. <em>recommended</em></label>
+    <label><input type="radio" name="Q7" id="Q7-B"> B. A provider's HTTP API and SDK (Postmark, SES or Resend)</label>
+    <label><input type="radio" name="Q7" id="Q7-C"> C. A local Postfix or sendmail on the VM</label>
+    <textarea id="Q7-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q8">
+    <legend><span class="id">Q8</span>What happens to the CLI and existing data?</legend>
+    <p class="why">The two existing tests and anyone's current <code>~/.todo.store</code> depend on this (<a class="id" href="#F4">F4</a>).</p>
+    <label><input type="radio" name="Q8" id="Q8-A" checked> A. The CLI stays as a server-side tool on the same database, acting as <code>--user</code> or <code>$TODO_USER</code>. It gains <code>import</code> and <code>remind</code>. <em>recommended</em></label>
+    <label><input type="radio" name="Q8" id="Q8-B"> B. The CLI becomes an HTTP client of the web app, using an API token</label>
+    <label><input type="radio" name="Q8" id="Q8-C"> C. Drop everything but <code>import</code> and <code>remind</code></label>
+    <textarea id="Q8-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q9">
+    <legend><span class="id">Q9</span>Who can create an account?</legend>
+    <p class="why">Open sign-up turns the app into a public email sender, which needs rate limits and abuse monitoring.</p>
+    <label><input type="radio" name="Q9" id="Q9-A" checked> A. Invite only: an address can sign in if an admin added it (<code>todo user add</code>) or a list was shared with it <em>recommended</em></label>
+    <label><input type="radio" name="Q9" id="Q9-B"> B. Anyone with an email address</label>
+    <label><input type="radio" name="Q9" id="Q9-C"> C. A fixed allowlist of addresses or domains in config</label>
+    <textarea id="Q9-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <div class="answers"><p class="answers-status" id="answers-status"></p>
+    <button class="btn" id="copy-answers" type="button">Copy answers</button>
+    <pre id="answers-out" hidden></pre>
+  </div>
+</section>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Runs the plugin eval suite against a real model. Needs an ANTHROPIC_API_KEY repository secret; costs API usage.
+name: evals
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: Case name glob (empty = all)
+        required: false
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: claude plugin eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude plugin eval . ${{ inputs.case && format('--case "{0}"', inputs.case) || '' }} \
+            --scaffold --trust-plugin --allow-tools Bash Write Edit \
+            --runs 1 --ablation none --no-publish --threshold 0.8 -j 4 \
+            --json evals/results/ci.json --report evals/results/report.html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/results/

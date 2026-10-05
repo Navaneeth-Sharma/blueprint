@@ -1,0 +1,32 @@
+{
+  "sheet": "explore",
+  "answers": {
+    "Q1": {
+      "option": "Q1-C",
+      "label": "C. Optional integer expiresInSeconds, 1–2592000 (30 days)",
+      "note": "picked on the page by the test"
+    },
+    "Q2": {
+      "option": "Q2-A",
+      "label": "A. No expiry; preserve URL-only 201 body and redirect behavior",
+      "note": ""
+    },
+    "Q3": {
+      "option": "Q3-A",
+      "label": "A. 404 not found and delete on lookup; same as unknown code",
+      "note": ""
+    },
+    "Q4": {
+      "option": "Q4-A",
+      "label": "A. No; O1 in-memory deadlines checked on GET and deleted lazily",
+      "note": ""
+    },
+    "Q5": {
+      "option": "Q5-A",
+      "label": "A. API request only; document the JSON field and example",
+      "note": ""
+    }
+  },
+  "text": "Q1: C. Optional integer expiresInSeconds, 1–2592000 (30 days) | note: picked on the page by the test\nQ2: A. No expiry; preserve URL-only 201 body and redirect behavior\nQ3: A. 404 not found and delete on lookup; same as unknown code\nQ4: A. No; O1 in-memory deadlines checked on GET and deleted lazily\nQ5: A. API request only; document the JSON field and example",
+  "savedAt": "2026-09-30T19:53:08+00:00"
+}

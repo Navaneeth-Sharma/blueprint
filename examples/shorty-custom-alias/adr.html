@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADR-0001 Choose a custom short-link alias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0001 · custom link alias</span>
+    <h1>Choose a custom short-link alias</h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>2<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill pass">Accepted</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>B</dd></div>
+    <div><dt>Repo</dt><dd>shorty</dd></div>
+    <div><dt>Published</dt><dd><a href="http://127.0.0.1:7331/a/adr-0001-custom-link-alias/">local record</a></dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>Q1–Q6 answered</small></li>
+    <li class="done"><a href="adr.html">Decide</a><small>ADR accepted</small></li>
+    <li><span>Build</span><small>verify E1–E12 and C1–C10</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary <span class="tag">accepted decision</span></h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd>POST /links always generates a code; callers cannot claim a memorable short path. An alias must not replace an existing redirect, including a generated code.</dd></div>
+    <div><dt>Decision</dt><dd>Accept an optional <code>alias</code> on the existing POST. Validate it strictly, reserve <code>links</code>, reject taken names with 409, and retry generated codes that collide. Both kinds remain in the same process-local map.</dd></div>
+    <div><dt>Verify by</dt><dd>Exercise create, redirect, invalid inputs, duplicate claims and restart against the HTTP server; force a generated-code collision in an allocator test. Both kinds of link must return 404 after restart.</dd></div>
+  </dl>
+</section>
+
+<section id="context">
+  <h2>Context</h2>
+  <p>The existing API returns <code>201 {"code":"…"}</code> for a generated six-hex code, ignores supplied aliases, and resolves GET paths from one map (<a class="id" href="explore.html#F1">F1</a>, <a class="id" href="explore.html#F3">F3</a>). Generated writes currently skip an occupancy check, so merely adding alias writes would risk changing an existing redirect (<a class="id" href="explore.html#F2">F2</a>). The route spelling <code>links</code> overlaps the API path, and callers have neither authentication nor a form (<a class="id" href="explore.html#F4">F4</a>, <a class="id" href="explore.html#F5">F5</a>). Existing tests cover ordinary redirect and invalid target URL, not claims or collisions (<a class="id" href="explore.html#F6">F6</a>).</p>
+</section>
+
+<section id="micro-features">
+  <h2>Micro features</h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt">Claim a chosen short path through POST /links and redirect from it without disturbing generated links.</p><p class="meta">Depends on the existing in-memory links Map · size S · API only, no durability or UI · carried from <a class="id" href="explore.html#M1">M1</a></p></div></li>
+  </ol>
+</section>
+
+<section id="answers">
+  <h2>Answers <span class="tag">all explicitly supplied</span></h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Question</th><th>Answer</th><th>Drives</th></tr></thead>
+    <tbody>
+      <tr id="Q1"><td><a class="id" href="explore.html#Q1">Q1</a> · A</td><td>Optional <code>alias</code> in POST /links; response remains <code>{"code":…}</code>.</td><td><a class="id" href="#D1">D1</a></td></tr>
+      <tr id="Q2"><td><a class="id" href="explore.html#Q2">Q2</a> · A</td><td>1–32 lowercase ASCII letters, digits and hyphens; reject other characters; reserve <code>links</code>.</td><td><a class="id" href="#D2">D2</a></td></tr>
+      <tr id="Q3"><td><a class="id" href="explore.html#Q3">Q3</a> · A</td><td>409 <code>alias taken</code> even for the same target URL; never overwrite.</td><td><a class="id" href="#D3">D3</a></td></tr>
+      <tr id="Q4"><td><a class="id" href="explore.html#Q4">Q4</a> · A</td><td>Aliases and generated links retain today's in-memory lifetime.</td><td><a class="id" href="#D4">D4</a></td></tr>
+      <tr id="Q5"><td><a class="id" href="explore.html#Q5">Q5</a> · A</td><td>Anyone who can POST today; first claim wins until the store resets.</td><td><a class="id" href="#D3">D3</a> <a class="id" href="#D5">D5</a></td></tr>
+      <tr id="Q6"><td><a class="id" href="explore.html#Q6">Q6</a> · A</td><td>API callers choose the alias in the request; no UI.</td><td><a class="id" href="#D5">D5</a></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions</h2>
+  <ol class="ledger">
+    <li id="D1"><span class="id">D1</span><div><p class="stmt">Keep POST /links: omitted <code>alias</code> uses a new six-character hex code; supplied valid <code>alias</code> becomes <code>code</code>. Success is 201 with only <code>{"code":"…"}</code>, and GET /&lt;code&gt; redirects exactly as today.</p><p>Preserves old callers (<a class="id" href="explore.html#F1">F1</a>) and uses the existing GET map lookup. Choose <a class="id" href="explore.html#O1">O1</a>; reject the separate PUT endpoint <a class="id" href="explore.html#O2">O2</a> as unnecessary API surface.</p><p class="meta">Q1 → A · unchanged URL parsing and 400 bad url precede alias handling</p></div></li>
+    <li id="D2"><span class="id">D2</span><div><p class="stmt">A present alias must be a string matching <code>^[a-z0-9-]{1,32}$</code> and must not equal <code>links</code>. No trim, coercion, case folding or decoding; invalid input returns 400 <code>bad alias</code> without storing a key.</p><p>GET looks up the exact path (<a class="id" href="explore.html#F4">F4</a>); a strict spelling avoids ambiguous or competing representations. An omitted field alone selects the generated branch; null and empty string are invalid.</p><p class="meta">Q2 → A · rejects Q2 → B's mixed-case/underscore/64-character rule</p></div></li>
+    <li id="D3"><span class="id">D3</span><div><p class="stmt">Use one map namespace: check for an occupied alias before storing; return 409 <code>alias taken</code> for any prior key regardless of URL. For generated codes, draw again while the candidate is occupied, then store only an unused key.</p><p>Both creation paths must preserve earlier redirects (<a class="id" href="explore.html#F2">F2</a>). Keep the check and insertion contiguous without async work in one Node process so two claims cannot both succeed. Reject returning an existing name on identical URL (Q3 → B): a claim is never an idempotent replay.</p><p class="meta">Q3 → A · Q5 → A · this is process-local, not a cross-process uniqueness guarantee</p></div></li>
+    <li id="D4"><span class="id">D4</span><div><p class="stmt">Keep aliases and generated links in the existing process-local Map, with no expiry until process reset and no persistence across restart or sharing between processes.</p><p>Matches current storage (<a class="id" href="explore.html#F3">F3</a>); reject Q4 → B's durable multi-process store as beyond the chosen lifetime.</p><p class="meta">Q4 → A · no migration or rollout dependency</p></div></li>
+    <li id="D5"><span class="id">D5</span><div><p class="stmt">Retain current unauthenticated POST access. Any caller may claim a free alias; expose no browser form, account ownership, editing or deletion API.</p><p>There is no authentication or UI to extend (<a class="id" href="explore.html#F5">F5</a>). Reject Q5 → B authentication and Q6 → B browser form; the first claim controls redirects only until the process store resets.</p><p class="meta">Q5 → A · Q6 → A · name squatting is an accepted risk</p></div></li>
+  </ol>
+</section>
+
+<section id="architecture">
+  <h2>Architecture <span class="tag">target state</span></h2>
+  <figure class="arch">
+    <div class="tier" data-tier="Clients"><div class="node ext">API caller<small>POST /links · optional alias</small></div><div class="node ext">Redirect visitor<small>GET /&lt;code&gt;</small></div></div>
+    <div class="link">HTTP POST / GET</div>
+    <div class="tier" data-tier="Node process"><div class="node chg">HTTP handler<small>server.js · parse URL, select branch, emit 201/400/409/302</small></div><span class="hl both">validate / allocate</span><div class="node new">Alias rule + free-code draw<small>1–32 ASCII pattern; links reserved; retry occupied hex</small></div></div>
+    <div class="link both">has / set / get within process</div>
+    <div class="tier" data-tier="Store"><div class="node">Links Map<small>unchanged · one code → URL namespace</small></div></div>
+    <figcaption><div class="legend"><span><i class="new"></i>new behavior</span><span><i class="chg"></i>changed</span><span><i></i>unchanged</span><span><i class="ext"></i>external</span><span><i class="gone"></i>removed: none</span></div>Only the HTTP creation path changes; redirect lookup and storage remain the current implementation (<a class="id" href="#D4">D4</a>).</figcaption>
+  </figure>
+</section>
+
+<section id="flows">
+  <h2>Flows <span class="tag">alias, rejection, generated collision</span></h2>
+  <figure class="seq" style="--n:4">
+    <div class="seq-actors"><b>API caller</b><b>Handler</b><b>Links Map</b><b>Visitor</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">POST /links · {"url":"https://example.com/a","alias":"team-offer"}</div>
+      <div class="msg self" style="--from:1">parse target URL, validate alias</div>
+      <div class="msg" style="--from:1;--to:2">has(team-offer)</div>
+      <div class="msg reply" style="--from:2;--to:1">false</div>
+      <div class="msg" style="--from:1;--to:2">set(team-offer, https://example.com/a)</div>
+      <div class="msg reply" style="--from:1;--to:0">201 {"code":"team-offer"}</div>
+      <div class="msg" style="--from:3;--to:1">GET /team-offer</div>
+      <div class="msg" style="--from:1;--to:2">get(team-offer)</div>
+      <div class="msg reply" style="--from:2;--to:1">https://example.com/a</div>
+      <div class="msg reply" style="--from:1;--to:3">302 Location: https://example.com/a</div>
+      <div class="seq-frag" data-label="alt · later claim with same or different URL">
+        <div class="msg" style="--from:0;--to:1">POST /links · alias team-offer</div>
+        <div class="msg" style="--from:1;--to:2">has(team-offer)</div>
+        <div class="msg reply" style="--from:2;--to:1">true · no set</div>
+        <div class="msg reply" style="--from:1;--to:0">409 alias taken</div>
+        <div class="seq-else">else · invalid alias (including reserved links)</div>
+        <div class="msg" style="--from:0;--to:1">POST /links · alias links</div>
+        <div class="msg self" style="--from:1">URL valid; alias rule fails · no map access</div>
+        <div class="msg reply" style="--from:1;--to:0">400 bad alias</div>
+        <div class="seq-else">else · bad target URL, even with a valid alias</div>
+        <div class="msg" style="--from:0;--to:1">POST /links · {"url":"nope","alias":"promo"}</div>
+        <div class="msg self" style="--from:1">URL parse fails · no map access</div>
+        <div class="msg reply" style="--from:1;--to:0">400 bad url</div>
+      </div>
+    </div>
+    <figcaption>Successful claim, exact GET, then failure paths. All failures leave the map untouched; the 409 path applies even when the supplied target matches the existing one.</figcaption>
+  </figure>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>API caller</b><b>Handler</b><b>Links Map</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">POST /links · {"url":"https://example.com/b"} (alias omitted)</div>
+      <div class="msg self" style="--from:1">normalize URL; draw six-hex candidate abcdef</div>
+      <div class="seq-frag" data-label="loop · candidate occupied by alias or prior generated link">
+        <div class="msg" style="--from:1;--to:2">has(abcdef)</div>
+        <div class="msg reply" style="--from:2;--to:1">true · do not overwrite</div>
+        <div class="msg self" style="--from:1">draw again · candidate 123456</div>
+      </div>
+      <div class="msg" style="--from:1;--to:2">has(123456)</div>
+      <div class="msg reply" style="--from:2;--to:1">false</div>
+      <div class="msg" style="--from:1;--to:2">set(123456, https://example.com/b)</div>
+      <div class="msg reply" style="--from:1;--to:0">201 {"code":"123456"}</div>
+    </div>
+    <figcaption>The existing six-hex format stays; a draw never replaces a claimed key (<a class="id" href="#D3">D3</a>). If the first draw is free, skip the retry branch.</figcaption>
+  </figure>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases <span class="tag">planned, not yet implemented</span></h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Concrete request or state</th><th>Expected result</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td>POST <code>{"url":"https://example.com/a"}</code>, alias absent.</td><td>201 with a free six-hex <code>code</code>; GET /&lt;code&gt; gives 302 to <code>https://example.com/a</code>.</td><td><a class="id" href="#D1">D1</a> <a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td>POST URL <code>https://example.com/a</code> with alias <code>team-offer</code>.</td><td>201 <code>{"code":"team-offer"}</code>; GET /team-offer gives 302 Location <code>https://example.com/a</code>.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td>Alias <code>""</code> or <code>" team "</code>.</td><td>Each returns 400 <code>bad alias</code>; no key is claimed.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td>Alias <code>12</code> or <code>null</code>.</td><td>Each returns 400 <code>bad alias</code>; no string coercion or key is stored.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td>Alias <code>café</code>, <code>Team</code>, <code>a/b</code> or <code>a_b</code>.</td><td>Each returns 400 <code>bad alias</code> and leaves the map unchanged; no normalization or encoding.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td>Aliases <code>-</code>, 32 <code>a</code>s, then 33 <code>a</code>s.</td><td>One and 32 characters each get 201 with that code; 33 characters gets 400 <code>bad alias</code> with no key.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E7"><td><span class="id">E7</span></td><td>Claim <code>promo</code> twice (same and different URLs); separately claim an already-generated six-hex code.</td><td>First claim gets 201; all subsequent claims get 409 <code>alias taken</code>; GET for either previously occupied key still redirects to its original URL.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E8"><td><span class="id">E8</span></td><td>Two simultaneous POSTs in one process claim <code>promo</code> for different URLs.</td><td>One 201 and one 409 <code>alias taken</code>; GET /promo goes to the winning target only.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E9"><td><span class="id">E9</span></td><td>Claim alias <code>abcdef</code>, then generator draws <code>abcdef</code> followed by <code>123456</code>.</td><td>Generated POST returns 201 <code>{"code":"123456"}</code>; GET /abcdef still redirects to its original URL.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E10"><td><span class="id">E10</span></td><td>Request alias <code>links</code>.</td><td>400 <code>bad alias</code>; POST /links still creates links and GET /links remains 404 <code>not found</code>.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E11"><td><span class="id">E11</span></td><td>Create alias <code>promo</code> and an auto-code, then restart the sole server process.</td><td>GET /promo and GET /&lt;old-auto-code&gt; both return 404 <code>not found</code> after restart; neither redirects.</td><td><a class="id" href="#D4">D4</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E12"><td><span class="id">E12</span></td><td>POST <code>{"url":"nope","alias":"promo"}</code>.</td><td>400 <code>bad url</code>; <code>promo</code> remains free and a later valid request can claim it for 201.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix <span class="tag">M1 · concrete combinations</span></h2>
+  <div class="scroll"><table class="matrix">
+    <thead><tr><th>Case</th><th>Target URL</th><th>Alias field</th><th>Key state</th><th>Process</th><th>Expected</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> Old caller</th><td>valid /a</td><td>omitted</td><td>first draw free</td><td>running</td><td>201 six-hex code; GET code → 302 /a</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> Generated collision</th><td>valid /b</td><td>omitted</td><td>first draw taken, next free</td><td>running</td><td>201 next six-hex code; occupied redirect unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> Fresh alias</th><td>valid /a</td><td>team-offer</td><td>free</td><td>running</td><td>201 {"code":"team-offer"}; GET → 302 /a</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C4"><th scope="row"><span class="id">C4</span> Same-target retry</th><td>same as first</td><td>promo</td><td>taken by alias</td><td>running</td><td>409 alias taken; original redirect unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C5"><th scope="row"><span class="id">C5</span> Different target</th><td>different /b</td><td>promo</td><td>taken by alias</td><td>running</td><td>409 alias taken; original redirect unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C6"><th scope="row"><span class="id">C6</span> Generated key claimed</th><td>different /b</td><td>existing six-hex</td><td>taken by generator</td><td>running</td><td>409 alias taken; generated redirect unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C7"><th scope="row"><span class="id">C7</span> Bad alias</th><td>valid /a</td><td>Team, 33 letters or null</td><td>free</td><td>running</td><td>400 bad alias; no key stored</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C8"><th scope="row"><span class="id">C8</span> Bad URL</th><td>nope</td><td>promo</td><td>free</td><td>running</td><td>400 bad url; promo stays free</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C9"><th scope="row"><span class="id">C9</span> Reserved route</th><td>valid /a</td><td>links</td><td>free</td><td>running</td><td>400 bad alias; GET /links → 404</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C10"><th scope="row"><span class="id">C10</span> Lifetime reset</th><td>valid /a</td><td>promo</td><td>taken before restart</td><td>restarted</td><td>GET /promo → 404; new claim returns 201</td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="plan">
+  <h2>Plan <span class="tag">approved for build</span></h2>
+  <ol class="ledger">
+    <li id="T1"><span class="id">T1</span><div><p class="stmt">Add failing HTTP contract tests for optional aliases, URL precedence, exact GET redirects and format boundaries in <code>test/server.test.js</code>.</p><p class="meta">M1 · implements D1 D2 · prove E1 E2 E3 E4 E5 E6 E10 E12 · C1 C3 C7 C8 C9</p></div></li>
+    <li id="T2"><span class="id">T2</span><div><p class="stmt">Update <code>server.js</code> creation path to parse once, validate a present alias, preserve existing URL error behavior and return the chosen code in the existing response.</p><p class="meta">M1 · implements D1 D2 · prove E1 E2 E3 E4 E5 E6 E10 E12 · C1 C3 C7 C8 C9</p></div></li>
+    <li id="T3"><span class="id">T3</span><div><p class="stmt">Add failing tests for same/different-target conflicts, concurrent claims, alias versus generated occupancy, and a deterministically forced generated collision. Exercise the allocator with injected draw candidates while keeping the public HTTP contract unchanged.</p><p class="meta">M1 · implements D3 D5 · prove E7 E8 E9 · C2 C4 C5 C6</p></div></li>
+    <li id="T4"><span class="id">T4</span><div><p class="stmt">Use the single Map for atomic-in-process alias claims and generated candidate rejection; retry occupied generated codes without replacing any key.</p><p class="meta">M1 · implements D3 D4 · prove E7 E8 E9 · C2 C4 C5 C6</p></div></li>
+    <li id="T5"><span class="id">T5</span><div><p class="stmt">Run tests and a real server HTTP smoke including restart/reset, then update <code>README.md</code> with the alias request, 400/409 responses and process-local lifetime. Write <code>build.html</code> with observed E# and C# results.</p><p class="meta">M1 · implements D1 D3 D4 D5 · prove E1 E2 E7 E9 E11 · C1 C2 C3 C4 C10</p></div></li>
+  </ol>
+</section>
+
+<section id="consequences">
+  <h2>Consequences</h2>
+  <div class="callout risk"><b>Accepted claim risk</b><p>Unauthenticated callers can squat on names; no ownership, release or edit operation exists. A restart releases all names and invalidates every redirect, including generated links (<a class="id" href="#D4">D4</a>, <a class="id" href="#D5">D5</a>).</p></div>
+  <div class="callout risk"><b>Capacity and visibility</b><p>Generated codes retain a six-hex, 16,777,216-value space. Retrying collisions preserves existing redirects but availability degrades as it fills; no production metrics or logs exist today (<a class="id" href="explore.html#F5">F5</a>). Verify creation and redirect by HTTP; capacity management is outside this API-only change.</p></div>
+  <div class="callout"><b>Rollout and rollback</b><p>No migration or deployment dependency. Deploying the modified process resets its Map, as any restart does today; rollback reverts the handler and likewise resets all process-local links. Communicate that no persisted claim survives either action.</p></div>
+  <div class="callout"><b>Out of scope</b><p>Authentication, a browser form, cross-process uniqueness, persistent storage, edit/delete APIs, URL-scheme policy changes, and new telemetry.</p></div>
+</section>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "blueprint",
+  "displayName": "Blueprint",
+  "version": "0.1.0",
+  "description": "Explore → Decide (ADR) → Build, with a reviewable HTML sheet for every phase: block and sequence diagrams, edge cases and a case matrix, specified per micro feature.",
+  "author": { "name": "Navaneeth Sharma", "url": "https://github.com/Navaneeth-Sharma" },
+  "homepage": "https://github.com/Navaneeth-Sharma/blueprint",
+  "repository": "https://github.com/Navaneeth-Sharma/blueprint",
+  "license": "MIT",
+  "keywords": ["adr", "architecture-decision-record", "spec", "sequence-diagram", "skill"]
+}

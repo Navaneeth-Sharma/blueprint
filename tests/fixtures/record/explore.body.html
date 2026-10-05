@@ -1,0 +1,90 @@
+<header class="tb">
+  <div class="tb-title"><span class="tb-no">ADR-0001</span><h1>JSON output for todo list</h1></div>
+  <div class="tb-sheet"><span>Sheet</span><b>1<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill info">Exploring</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Test Owner</dd></div>
+    <div><dt>Rev</dt><dd>A</dd></div>
+    <div><dt>Published</dt><dd>not yet</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="now"><a href="explore.html">Explore</a><small>1 question open</small></li>
+    <li><span>Decide</span><small>after your answers</small></li>
+    <li><span>Build</span><small>not started</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd>Scripts parse the table printed by <code>todo list</code>, which breaks when a title contains two spaces.</dd></div>
+    <div><dt>Why now</dt><dd>The sync script broke twice this week.</dd></div>
+    <div><dt>Leaning</dt><dd><a class="id" href="#O1">O1</a>, a <code>--json</code> flag.</dd></div>
+  </dl>
+</section>
+
+<section id="micro">
+  <h2>Micro features</h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt"><code>todo list --json</code> prints the list as a JSON array</p><p class="meta">depends on nothing · size S</p></div></li>
+  </ol>
+</section>
+
+<section id="current">
+  <h2>Current state</h2>
+  <figure class="arch">
+    <div class="tier" data-tier="CLI"><div class="node">todo list via <code>python3 -m todo</code><small>todo/cli.py</small></div></div>
+    <div class="link">calls <code>store.load()</code> then formats</div>
+    <div class="tier" data-tier="Data"><div class="node">~/.todo.store<small>or $TODO_FILE</small></div></div>
+  </figure>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>Shell</b><b>CLI</b><b>Store</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">todo list</div>
+      <div class="msg" style="--from:1;--to:2">load()</div>
+      <div class="msg reply" style="--from:2;--to:1">items</div>
+      <div class="msg reply" style="--from:1;--to:0">padded table</div>
+    </div>
+  </figure>
+</section>
+
+<section id="findings">
+  <h2>Findings</h2>
+  <ol class="ledger">
+    <li id="F1"><span class="id">F1</span><div><p>The table is built with padded f-strings.</p><cite>todo/cli.py:34 · https://docs.python.org/3/library/string.html#format-specification-mini-language · high confidence</cite></div></li>
+    <li id="F2"><span class="id">F2</span>A row is <code>f"{item['id']:>3}  [{mark}]  {item['title']}"</code>, written straight into the list item.</li>
+  </ol>
+</section>
+
+<section id="options">
+  <h2>Options</h2>
+  <div class="options">
+    <article class="option pick" id="O1"><header><span class="id">O1</span><h3>--json flag</h3></header><ul class="pros"><li>Stable for scripts: <code>todo list --json | jq -r '.[]|select(.done==false)|.title'</code></li></ul><ul class="cons"><li>One more flag</li></ul><footer><span>Effort <b>S</b></span></footer></article>
+    <article class="option" id="O2"><header><span class="id">O2</span><h3>TSV output</h3></header><ul class="pros"><li>Works with cut</li></ul><ul class="cons"><li>Tabs in titles break it</li></ul><footer><span>Effort <b>S</b></span></footer></article>
+  </div>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Expected</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td>Empty list</td><td>Prints <code>[]</code>, exit 0</td><td><span class="pill">open</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td>Title "café ☕"</td><td>Printed as UTF-8, not <code>é</code></td><td><span class="pill">open</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout risk"><b>Risk</b>Scripts that parse <code>todo list</code> today keep working only if the plain output stays byte for byte the same.</div>
+</section>
+
+<section id="questions">
+  <h2>Questions for you</h2>
+  <fieldset class="q" id="Q1">
+    <legend><span class="id">Q1</span>Include completed items in <code>todo list --json</code> output?</legend>
+    <p class="why">Scripts may want only open items.</p>
+    <label><input type="radio" name="Q1" id="Q1-A" checked> A. Yes, with a done field <em>recommended</em></label>
+    <label><input type="radio" name="Q1" id="Q1-B"> B. No: print <code>json.dumps([i for i in items if not i["done"]],ensure_ascii=False,separators=(",",":"))</code></label>
+    <textarea id="Q1-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <div class="answers"><p class="answers-status" id="answers-status">Your picks are kept in this browser only.</p><button class="btn" id="copy-answers" type="button">Copy answers</button><pre id="answers-out" hidden></pre></div>
+</section>

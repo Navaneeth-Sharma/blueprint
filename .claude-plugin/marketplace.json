@@ -1,0 +1,13 @@
+{
+  "name": "blueprint",
+  "owner": { "name": "Navaneeth Sharma", "url": "https://github.com/Navaneeth-Sharma" },
+  "description": "Blueprint: an HTML-first Explore → ADR → Build lifecycle for coding agents.",
+  "plugins": [
+    {
+      "name": "blueprint",
+      "source": "./",
+      "description": "Explore → Decide (ADR) → Build, with a reviewable HTML sheet for every phase.",
+      "version": "0.1.0"
+    }
+  ]
+}

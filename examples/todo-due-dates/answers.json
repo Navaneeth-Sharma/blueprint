@@ -1,0 +1,37 @@
+{
+  "sheet": "explore",
+  "answers": {
+    "Q1": {
+      "option": "Q1-B",
+      "label": "B. When its due date is today or earlier",
+      "note": "picked on the page by the test"
+    },
+    "Q2": {
+      "option": "Q2-A",
+      "label": "A. Overdue items first, oldest due date first (ties by id). Everything else stays in id order, as today.",
+      "note": ""
+    },
+    "Q3": {
+      "option": "Q3-A",
+      "label": "A. A plain-text suffix: 4 [ ] file taxes (due 2026-09-30, overdue)",
+      "note": ""
+    },
+    "Q4": {
+      "option": "Q4-A",
+      "label": "A. ISO dates only (YYYY-MM-DD) via stdlib date.fromisoformat",
+      "note": ""
+    },
+    "Q5": {
+      "option": "Q5-A",
+      "label": "A. Yes. It shows as overdue straight away.",
+      "note": ""
+    },
+    "Q6": {
+      "option": "Q6-A",
+      "label": "A. Not now. Due dates are set only with add --due. Add a command later if you miss it.",
+      "note": ""
+    }
+  },
+  "text": "Q1: B. When its due date is today or earlier | note: picked on the page by the test\nQ2: A. Overdue items first, oldest due date first (ties by id). Everything else stays in id order, as today.\nQ3: A. A plain-text suffix: 4 [ ] file taxes (due 2026-09-30, overdue)\nQ4: A. ISO dates only (YYYY-MM-DD) via stdlib date.fromisoformat\nQ5: A. Yes. It shows as overdue straight away.\nQ6: A. Not now. Due dates are set only with add --due. Add a command later if you miss it.",
+  "savedAt": "2026-09-30T19:45:23+00:00"
+}

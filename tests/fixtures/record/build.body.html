@@ -1,0 +1,85 @@
+<header class="tb">
+  <div class="tb-title"><span class="tb-no">ADR-0001</span><h1>JSON output for todo list</h1></div>
+  <div class="tb-sheet"><span>Sheet</span><b>3<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill warn">Partially verified</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Test Owner</dd></div>
+    <div><dt>Rev</dt><dd>A</dd></div>
+    <div><dt>Published</dt><dd>not yet</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>answered</small></li>
+    <li class="done"><a href="adr.html">Decide</a><small>accepted</small></li>
+    <li class="now"><a href="build.html">Build</a><small>2 of 3 edge cases pass</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Shipped</dt><dd><code>todo list --json</code>.</dd></div>
+    <div><dt>Verified</dt><dd><a class="id" href="#E1">E1</a> and <a class="id" href="#E2">E2</a> by running the CLI.</dd></div>
+    <div><dt>Left</dt><dd><a class="id" href="#E3">E3</a> untested.</dd></div>
+  </dl>
+</section>
+
+<section id="built">
+  <h2>Planned vs built</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Plan</th><th>What shipped</th><th>Where</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><a class="id" href="adr.html#T1">T1</a> --json flag</td><td>As planned</td><td><code>todo/cli.py:52</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="adr.html#T2">T2</a> Missing store</td><td>As planned</td><td><code>todo/store.py:18</code></td><td><span class="pill pass">done</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="as-built">
+  <h2>As built</h2>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>Shell</b><b>CLI</b><b>Store</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">todo list --json</div>
+      <div class="msg" style="--from:1;--to:2">load()</div>
+      <div class="msg reply" style="--from:2;--to:1">items</div>
+      <div class="msg reply" style="--from:1;--to:0">JSON array</div>
+    </div>
+  </figure>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Observed</th><th>Evidence</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td>Empty list</td><td>Printed <code>[]</code>, exit 0</td><td><a class="id" href="#V1">V1</a></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td>Title "café ☕"</td><td>UTF-8 kept</td><td><a class="id" href="#V1">V1</a></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td>Store file missing</td><td>Not run</td><td>—</td><td><span class="pill">untested</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix</h2>
+  <div class="scroll"><table class="matrix">
+    <thead>
+      <tr><th rowspan="2">Case</th><th colspan="2" class="grp">Conditions</th><th colspan="2" class="grp">Outcome</th></tr>
+      <tr><th>Store exists</th><th>Has items</th><th>Expected</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> Normal</th><td class="y">yes</td><td class="y">yes</td><td>JSON array of items</td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> Empty</th><td class="y">yes</td><td class="n">no</td><td><code>[]</code></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> No store</th><td class="n">no</td><td class="any">—</td><td><code>[]</code></td><td><span class="pill">untested</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="evidence">
+  <h2>Evidence</h2>
+  <details class="evidence" id="V1" open>
+    <summary><code>python3 -m todo list --json</code><span class="pill pass">exit 0</span></summary>
+    <pre>[{"id": 1, "title": "café ☕", "done": false}]</pre>
+    <p>Proves <a class="id" href="#E2">E2</a>.</p>
+  </details>
+</section>

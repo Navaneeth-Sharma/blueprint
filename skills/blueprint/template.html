@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blueprint component sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<!-- Everything below is sample content. Copy the markup of the components you need. -->
+
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0000 · sample record</span>
+    <h1>Idempotent payment webhooks</h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>2<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill warn">Proposed</span></dd></div>
+    <div><dt>Date</dt><dd>2026-09-30</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>B</dd></div>
+    <div><dt>Repo</dt><dd>payments-api</dd></div>
+    <div><dt>Published</dt><dd>not yet</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>3 questions answered</small></li>
+    <li class="now"><span>Decide</span><small>ADR waiting for review</small></li>
+    <li><span>Build</span><small>verify E1–E6 and C1–C5</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary <span class="tag">every sheet</span></h2>
+  <p class="callout"><b>Sample sheet</b>Every Blueprint component, filled with one example change. The tag on each heading names the phases that use it.</p>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd>The provider retries webhooks for up to 3 days. Our handler has no idempotency check, so a retry after a lost 200 applies the credit twice. This happened twice in September.</dd></div>
+    <div><dt>Decision</dt><dd>Gate every event on its provider event id with a Redis <code>SET NX</code> before enqueueing. A unique index on the ledger stays as the backstop.</dd></div>
+    <div><dt>Verify by</dt><dd>Replay one captured event 50 times in parallel. Expect one ledger row, one 200 marked new and 49 replays.</dd></div>
+  </dl>
+</section>
+
+<section id="micro">
+  <h2>Micro features <span class="tag">every sheet</span></h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt">A retried or duplicated webhook applies its credit exactly once</p><p class="meta">depends on nothing · size S</p></div></li>
+  </ol>
+</section>
+
+<section id="findings">
+  <h2>Findings <span class="tag">explore</span></h2>
+  <ol class="ledger">
+    <li id="F1"><span class="id">F1</span><div><p>The provider retries with exponential backoff for up to 72 hours and can deliver the same event twice at once.</p><cite>Provider webhook docs, "Retries" · high confidence</cite></div></li>
+    <li id="F2"><span class="id">F2</span><div><p>The handler enqueues before any check. The worker inserts into <code>ledger_entries</code>, which has no unique constraint on the event id.</p><cite>handlers/payments.py:88 · workers/credit.py:41 · high confidence</cite></div></li>
+    <li id="F3"><span class="id">F3</span><div><p>Both duplicate-credit incidents started with 502s from the load balancer during a deploy, which the provider treats as failures and retries.</p><cite>INC-231, INC-244 · medium confidence</cite></div></li>
+  </ol>
+</section>
+
+<section id="options">
+  <h2>Options <span class="tag">explore · decide</span></h2>
+  <div class="options">
+    <article class="option pick" id="O1">
+      <header><span class="id">O1</span><h3>Redis gate + DB backstop</h3><span class="pill pass">chosen</span></header>
+      <ul class="pros"><li>Rejects duplicates before any work runs</li><li>Handles concurrent deliveries (<a class="id" href="#F1">F1</a>)</li></ul>
+      <ul class="cons"><li>Redis joins the ingest hot path</li><li>Needs a policy for Redis outages</li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+    <article class="option" id="O2">
+      <header><span class="id">O2</span><h3>Unique index only</h3><span class="pill">rejected</span></header>
+      <ul class="pros"><li>No new infrastructure</li><li>Strong guarantee at the database</li></ul>
+      <ul class="cons"><li>The job still runs twice up to the insert</li><li>Emails sent before the insert repeat</li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>medium</b></span></footer>
+    </article>
+    <article class="option" id="O3">
+      <header><span class="id">O3</span><h3>Transactional outbox</h3><span class="pill">rejected</span></header>
+      <ul class="pros"><li>Exactly once end to end</li><li>Full audit trail</li></ul>
+      <ul class="cons"><li>New relay process to run and monitor</li><li>Largest change of the three</li></ul>
+      <footer><span>Effort <b>L</b></span><span>Risk <b>medium</b></span></footer>
+    </article>
+  </div>
+</section>
+
+<section id="questions">
+  <h2>Questions for you <span class="tag">explore</span></h2>
+  <fieldset class="q" id="Q1">
+    <legend><span class="id">Q1</span>If Redis is down, should ingest fail open or fail closed?</legend>
+    <p class="why">Decides whether an outage delays payments or risks duplicates.</p>
+    <label><input type="radio" name="Q1" id="Q1-A" checked> A. Fail closed: return 503 so the provider retries later <em>recommended</em></label>
+    <label><input type="radio" name="Q1" id="Q1-B"> B. Fail open: process anyway and rely on the unique index</label>
+    <textarea id="Q1-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q2">
+    <legend><span class="id">Q2</span>How long do we remember an event id?</legend>
+    <p class="why">Must cover the provider's retry window (<a class="id" href="#F1">F1</a>). Longer costs Redis memory.</p>
+    <label><input type="radio" name="Q2" id="Q2-A" checked> A. 72 hours, the full retry window <em>recommended</em></label>
+    <label><input type="radio" name="Q2" id="Q2-B"> B. 7 days</label>
+    <label><input type="radio" name="Q2" id="Q2-C"> C. 24 hours</label>
+    <textarea id="Q2-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <div class="answers">
+    <p class="answers-status" id="answers-status">Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.</p>
+    <button class="btn" id="copy-answers" type="button">Copy answers</button>
+    <pre id="answers-out" hidden></pre>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions <span class="tag">decide</span></h2>
+  <ol class="ledger">
+    <li id="D1"><span class="id">D1</span><div><p class="stmt">Dedupe on the provider event id at ingest, before enqueue, with <code>SET evt:{id} NX EX 259200</code>.</p><p>Concurrent deliveries are real (<a class="id" href="#F1">F1</a>), so the check must be atomic. Chose <a class="id" href="#O1">O1</a>; <a class="id" href="#O2">O2</a> still repeats emails.</p><p class="meta">TTL from Q2 → A (assumed)</p></div></li>
+    <li id="D2"><span class="id">D2</span><div><p class="stmt">Fail closed on Redis errors: return 503 with <code>Retry-After: 30</code>.</p><p>A delayed credit is recoverable. A double credit needs a manual reversal.</p><p class="meta">Q1 → A</p></div></li>
+    <li id="D3"><span class="id">D3</span><div><p class="stmt">Add a unique index on <code>ledger_entries(provider_event_id)</code>. The worker treats a conflict as success.</p><p>Covers keys that expire before a very late retry, and any Redis data loss.</p></div></li>
+  </ol>
+</section>
+
+<section id="architecture">
+  <h2>Architecture <span class="tag">explore · decide · build</span></h2>
+  <figure class="arch">
+    <div class="tier" data-tier="External">
+      <div class="node ext">Payment provider<small>signed webhooks · retries ≤ 72h</small></div>
+    </div>
+    <div class="link">HTTPS POST /webhooks/payments</div>
+    <div class="tier" data-tier="Ingest">
+      <div class="node chg">Ingest API<small>FastAPI · handlers/payments.py</small></div>
+      <span class="hl both">SET NX EX</span>
+      <div class="node new">Dedup store<small>Redis · key per event id</small></div>
+    </div>
+    <div class="link">enqueue(event) only when the key is new</div>
+    <div class="tier" data-tier="Process">
+      <div class="node">Job queue<small>SQS · payments</small></div>
+      <span class="hl">deliver</span>
+      <div class="node chg">Credit worker<small>workers/credit.py</small></div>
+      <div class="node gone">Nightly reconcile<small>scripts/reconcile.py</small></div>
+    </div>
+    <div class="link">INSERT … ON CONFLICT DO NOTHING</div>
+    <div class="tier" data-tier="Data">
+      <div class="node chg">Ledger DB<small>Postgres · + unique index</small></div>
+      <div class="node ext">Email service<small>receipts</small></div>
+    </div>
+    <figcaption>
+      <div class="legend"><span><i class="new"></i>new</span><span><i class="chg"></i>changed</span><span><i></i>unchanged</span><span><i class="ext"></i>external</span><span><i class="gone"></i>removed</span></div>
+      Target state. The reconcile script goes away once <a class="id" href="#D3">D3</a> lands.
+    </figcaption>
+  </figure>
+</section>
+
+<section id="flows">
+  <h2>Flows <span class="tag">explore · decide · build</span></h2>
+  <figure class="seq" style="--n:5">
+    <div class="seq-actors">
+      <b>Provider<small>external</small></b><b>Ingest API</b><b>Redis</b><b>Queue</b><b>Worker</b>
+    </div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">POST /webhooks/payments · <code>evt_1Q2w</code></div>
+      <div class="msg self" style="--from:1">verify signature</div>
+      <div class="msg" style="--from:1;--to:2">SET evt:1Q2w NX EX 259200</div>
+      <div class="msg reply" style="--from:2;--to:1">OK (new key)</div>
+      <div class="msg" style="--from:1;--to:3">enqueue(evt_1Q2w)</div>
+      <div class="msg reply" style="--from:1;--to:0">200 {"received": true}</div>
+      <div class="seq-frag" data-label="alt · provider retries the same event">
+        <div class="msg" style="--from:0;--to:1">POST /webhooks/payments · <code>evt_1Q2w</code></div>
+        <div class="msg" style="--from:1;--to:2">SET evt:1Q2w NX</div>
+        <div class="msg reply" style="--from:2;--to:1">nil (key exists)</div>
+        <div class="msg reply" style="--from:1;--to:0">200 replay of the stored body</div>
+        <div class="seq-else">else · Redis unavailable</div>
+        <div class="msg" style="--from:1;--to:2">SET evt:1Q2w NX</div>
+        <div class="msg reply" style="--from:2;--to:1">connection refused</div>
+        <div class="msg reply" style="--from:1;--to:0">503 · Retry-After: 30</div>
+        <div class="seq-note" style="--from:1;--to:2">Nothing is enqueued. The provider retries in 30s (<a class="id" href="#D2">D2</a>).</div>
+      </div>
+      <div class="msg" style="--from:3;--to:4">deliver evt_1Q2w</div>
+      <div class="msg self" style="--from:4">insert, no-op on conflict</div>
+    </div>
+    <figcaption>Happy path S1–S6, then the duplicate and outage branches. Step numbers continue across every diagram on the sheet, so each S# is unique.</figcaption>
+  </figure>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases <span class="tag">every sheet</span></h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Expected behaviour</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td><b>Retry after a lost 200</b><br>The provider never saw our response.</td><td>Replay returns 200 with the stored body. No second enqueue.</td><td><a class="id" href="#D1">D1</a> <a class="id" href="#S7">S7</a></td><td><span class="sev high">high</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td><b>Two deliveries at once</b><br>Same event, same millisecond.</td><td>Exactly one <code>SET NX</code> wins. The other request replays.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev high">high</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td><b>Redis down</b></td><td>503 with <code>Retry-After: 30</code>. Nothing enqueued.</td><td><a class="id" href="#D2">D2</a> <a class="id" href="#S11">S11</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td><b>Worker crashes after insert, before ack</b></td><td>Redelivery hits the unique index and counts as success.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">untested</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td><b>Same id, different payload</b><br>Provider bug or a replay attack.</td><td>Reject with 422 and alert.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill fail">fail</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td><b>Retry after the key expired</b></td><td>Processed again. The ledger insert is a no-op.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev low">low</span></td><td><span class="pill">untested</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix <span class="tag">decide · build</span></h2>
+  <div class="scroll"><table class="matrix">
+    <thead>
+      <tr><th rowspan="2">Case</th><th colspan="4" class="grp">Conditions</th><th colspan="2" class="grp">Outcome</th></tr>
+      <tr><th>Id seen</th><th>Payload matches</th><th>Redis up</th><th>Ledger row exists</th><th>Expected</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> First delivery</th><td class="n">no</td><td class="any">—</td><td class="y">yes</td><td class="n">no</td><td>200 · enqueued once</td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> Plain retry</th><td class="y">yes</td><td class="y">yes</td><td class="y">yes</td><td class="any">—</td><td>200 · stored body replayed</td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> Tampered retry</th><td class="y">yes</td><td class="n">no</td><td class="y">yes</td><td class="any">—</td><td>422 · alert raised</td><td><span class="pill fail">fail</span></td></tr>
+      <tr id="C4"><th scope="row"><span class="id">C4</span> Outage</th><td class="any">—</td><td class="any">—</td><td class="n">no</td><td class="any">—</td><td>503 · Retry-After 30</td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="C5"><th scope="row"><span class="id">C5</span> Late retry</th><td class="n">expired</td><td class="any">—</td><td class="y">yes</td><td class="y">yes</td><td>200 · ledger no-op</td><td><span class="pill">untested</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="plan">
+  <h2>Plan <span class="tag">decide</span></h2>
+  <ol class="ledger">
+    <li id="T1"><span class="id">T1</span><div><p class="stmt">Dedupe gate in the ingest handler, storing the first response body</p><p class="meta">implements D1 · proven by E1 E2 C1 C2</p></div></li>
+    <li id="T2"><span class="id">T2</span><div><p class="stmt">Map Redis errors to 503 with Retry-After</p><p class="meta">implements D2 · proven by E3 C4</p></div></li>
+    <li id="T3"><span class="id">T3</span><div><p class="stmt">Migration: unique index on the ledger, plus ON CONFLICT in the worker</p><p class="meta">implements D3 · proven by E4 E6 C5</p></div></li>
+    <li id="T4"><span class="id">T4</span><div><p class="stmt">Compare a payload hash on replay and reject mismatches with 422</p><p class="meta">implements D1 · proven by E5 C3</p></div></li>
+  </ol>
+</section>
+
+<section id="built">
+  <h2>Planned vs built <span class="tag">build</span></h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Plan</th><th>What shipped</th><th>Where</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><a class="id" href="#T1">T1</a> Dedupe gate</td><td>As planned</td><td><code>handlers/payments.py:74</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="#T2">T2</a> 503 on Redis errors</td><td>As planned</td><td><code>handlers/payments.py:96</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="#T3">T3</a> Unique index</td><td>Used <code>ON CONFLICT DO NOTHING RETURNING id</code> instead of catching the violation. Same guarantee, no exception path.</td><td><code>migrations/0042_ledger_event_uq.sql</code></td><td><span class="pill warn">changed</span></td></tr>
+      <tr><td><a class="id" href="#T4">T4</a> Payload hash</td><td>Not built. Moved to follow-up #482.</td><td>—</td><td><span class="pill fail">deferred</span></td></tr>
+      <tr><td>Not in plan</td><td>Counter <code>webhook_duplicates_total</code> for dashboards</td><td><code>handlers/payments.py:81</code></td><td><span class="pill info">added</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="evidence">
+  <h2>Evidence <span class="tag">build</span></h2>
+  <details class="evidence" open>
+    <summary><code>pytest tests/webhooks -q</code><span class="pill pass">38 passed · 1 xfail</span></summary>
+    <pre>......................................x
+38 passed, 1 xfailed in 4.21s</pre>
+    <p>The xfail is <a class="id" href="#E5">E5</a>, left failing on purpose until T4 ships.</p>
+  </details>
+  <details class="evidence">
+    <summary><code>python scripts/replay_webhook.py evt_1Q2w --parallel 50</code><span class="pill pass">1 ledger row</span></summary>
+    <pre>responses: 200 new ×1, 200 replay ×49, 5xx ×0
+ledger_entries where provider_event_id = 'evt_1Q2w': 1 row</pre>
+    <p>Proves <a class="id" href="#E2">E2</a> and <a class="id" href="#C2">C2</a> against a local stack.</p>
+  </details>
+</section>
+
+<section id="consequences">
+  <h2>Consequences <span class="tag">decide · build</span></h2>
+  <div class="callout risk"><b>Risk</b><p>Redis becomes a hard dependency of ingest. An outage delays every payment webhook until it recovers.</p></div>
+  <div class="callout assume"><b>Assumed</b><p>Q2 had no answer. Took the recommended option A: event ids are kept for 72 hours.</p></div>
+  <div class="callout ok"><b>Rollback</b><p>Remove the gate behind <code>WEBHOOK_DEDUPE=0</code>. The unique index stays; it is safe on its own.</p></div>
+</section>
+</main>
+</div>
+</body>
+</html>

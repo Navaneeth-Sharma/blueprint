@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADR-0001 todo list --json</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0001 · list-json</span>
+    <h1>Machine-readable <code>todo list --json</code></h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>3<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill pass">Verified</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>A</dd></div>
+    <div><dt>Repo</dt><dd>claude-lifecycle</dd></div>
+    <div><dt>Published</dt><dd>not yet (local file)</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>5 questions answered</small></li>
+    <li class="done"><a href="adr.html">Decide</a><small>ADR accepted, Rev B</small></li>
+    <li class="now"><span>Build</span><small>E1–E15 and C1–C8 pass</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Shipped</dt><dd><code>todo list --json</code> prints <code>json.dumps(items)</code>. The change is one flag and one branch in <code>todo/cli.py</code>, plus <code>test_list_json</code> and one README line. The diff is 22 insertions and 2 deletions. Nothing is committed yet.</dd></div>
+    <div><dt>Verified</dt><dd>All 15 edge cases and all 8 matrix cases pass on the real CLI, checked with <code>jq</code>, <code>od -c</code> and <code>cmp</code> against the pre-change commit <code>195c2d2</code>. All 3 unit tests pass. Every D1–D5 shipped as written.</dd></div>
+    <div><dt>Left</dt><dd>Fix the expected text of E5, E13 and C5 in the ADR, which shows unescaped output. The non-atomic <code>save()</code> race and the <code>{}</code> store are still accepted risks, as the ADR says. Commit when you ask.</dd></div>
+  </dl>
+</section>
+
+<section id="built">
+  <h2>Planned vs built</h2>
+  <p>There is one micro feature, <a class="id" href="adr.html#M1">M1</a>, so every row below belongs to it. All five decisions are covered: D1–D5 by <a class="id" href="adr.html#T2">T2</a>, and D5 also by <a class="id" href="adr.html#T3">T3</a>.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Plan</th><th>What shipped</th><th>Where</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><a class="id" href="adr.html#T1">T1</a> Failing test</td><td><code>test_list_json</code> as planned: an empty store gives <code>[]\n</code>, then two items (one title holds a newline, a quote, a tab and <code>café ☕</code>) with item 1 done. It asserts <code>json.loads</code> equality, exactly one line, and ASCII-only output ending in <code>\n</code>. It failed first with <code>SystemExit: 2</code> (<a href="#ev-red">evidence</a>).</td><td><code>tests/test_cli.py:35–48</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="adr.html#T2">T2</a> Flag and branch</td><td>Added <code>--json</code> (<code>store_true</code>) to the <code>list</code> subparser, and an <code>elif args.json: print(json.dumps(items))</code> branch ahead of the plain loop. The plain loop is unchanged.</td><td><code>todo/cli.py:3</code>, <code>:13</code>, <code>:32–33</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="adr.html#T3">T3</a> README</td><td><code>python3 -m todo list --json   # for scripts: one-line JSON array of {id, title, done}</code></td><td><code>README.md:7</code></td><td><span class="pill pass">done</span></td></tr>
+      <tr><td><a class="id" href="adr.html#T4">T4</a> End-to-end run</td><td>The real CLI on a scratch <code>$TODO_FILE</code>, with <code>jq</code>, <code>od -c</code>, <code>cmp</code>, <code>PYTHONIOENCODING=ascii</code>, hand-edited stores, <code>git archive 195c2d2</code> and 200 parallel adds. See <a href="#evidence">Evidence</a>.</td><td>scratch dir, not committed</td><td><span class="pill pass">done</span></td></tr>
+      <tr><td>Not in plan</td><td>The module docstring's usage line now reads <code>todo list [--json]</code>.</td><td><code>todo/cli.py:1</code></td><td><span class="pill info">added</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="as-built">
+  <h2>As built</h2>
+  <figure class="arch">
+    <div class="tier" data-tier="Caller">
+      <div class="node ext">Shell script<small>jq '.[]' · or a person at a terminal</small></div>
+    </div>
+    <div class="link">python3 -m todo list --json</div>
+    <div class="tier" data-tier="CLI">
+      <div class="node chg">cli.py main()<small>--json on list · cli.py:13 · json.dumps branch cli.py:32–33</small></div>
+      <div class="node chg">tests/test_cli.py<small>+ test_list_json · :35–48</small></div>
+      <div class="node chg">README.md<small>+ usage line · :7</small></div>
+    </div>
+    <div class="link">store.load()</div>
+    <div class="tier" data-tier="Store">
+      <div class="node">store.py<small>load() / save() · unchanged</small></div>
+      <span class="hl both">read_text / write_text</span>
+      <div class="node">$TODO_FILE<small>JSON array · default ~/.todo.store · unchanged</small></div>
+    </div>
+    <figcaption>
+      <div class="legend"><span><i class="chg"></i>changed</span><span><i></i>unchanged</span><span><i class="ext"></i>external</span></div>
+      Matches the ADR target state. <code>store.py</code> has no diff (<a class="id" href="adr.html#D4">D4</a>).
+    </figcaption>
+  </figure>
+
+  <figure class="seq" style="--n:4">
+    <div class="seq-actors">
+      <b>Shell script<small>external</small></b><b>cli.py</b><b>store.py</b><b>$TODO_FILE</b>
+    </div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1"><code>todo list --json</code></div>
+      <div class="msg self" style="--from:1">argparse · list subparser sets <code>args.json = True</code> (cli.py:13)</div>
+      <div class="msg" style="--from:1;--to:2">load() (cli.py:17)</div>
+      <div class="msg" style="--from:2;--to:3">read_text()</div>
+      <div class="msg reply" style="--from:3;--to:2">JSON text</div>
+      <div class="msg reply" style="--from:2;--to:1">list of items, unchanged</div>
+      <div class="msg self" style="--from:1"><code>elif args.json: print(json.dumps(items))</code> (cli.py:32–33)</div>
+      <div class="msg reply" style="--from:1;--to:0">one ASCII line + <code>\n</code> · exit 0</div>
+      <div class="seq-frag" data-label="alt · no store file">
+        <div class="msg reply" style="--from:2;--to:1"><code>[]</code>, because <code>p.exists()</code> is false</div>
+        <div class="msg reply" style="--from:1;--to:0"><code>[]\n</code> · exit 0 · no file created</div>
+        <div class="seq-else">else · store is zero bytes or corrupt</div>
+        <div class="msg reply" style="--from:2;--to:1">JSONDecodeError raised</div>
+        <div class="msg reply" style="--from:1;--to:0">traceback on stderr · exit 1 · 0 bytes on stdout</div>
+        <div class="seq-else">else · <code>todo --json list</code>, or a todo from 195c2d2</div>
+        <div class="msg reply" style="--from:1;--to:0"><code>unrecognized arguments: --json</code> · exit 2 · 0 bytes on stdout</div>
+        <div class="seq-else">else · no flag</div>
+        <div class="msg reply" style="--from:1;--to:0">padded rows, same bytes as 195c2d2</div>
+      </div>
+    </div>
+    <figcaption>What runs: happy path S1–S8, then first run (S9–S10), corrupt store (S11–S12), flag rejected (S13) and no flag (S14). The flow is the same as the ADR's.</figcaption>
+  </figure>
+
+  <div class="callout ok"><b>No deviations from the decisions</b><p>D1–D5 shipped as written. <code>adr.html</code> is not amended.</p></div>
+  <div class="callout risk"><b>Typo in the ADR's expected text</b><p>For <a class="id" href="adr.html#E5">E5</a>, <a class="id" href="adr.html#E13">E13</a> and <a class="id" href="adr.html#C5">C5</a>, the ADR gives the expected stdout as <code>"café ☕"</code>. That contradicts its own <a class="id" href="adr.html#D1">D1</a> (non-ASCII escaped as <code>\uXXXX</code>) and the "no bytes above 0x7F" in E5. The CLI prints <code>"café ☕"</code>, which is what D1 specifies, so these rows are graded against D1. The tables below use the escaped form.</p></div>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Expected behaviour</th><th>Observed</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td><b>First run, no store file</b></td><td>stdout is exactly <code>[]\n</code>, exit 0. Plain <code>list</code> prints nothing, and no store file is created.</td><td><code>od -c</code>: <code>[ ] \n</code>, exit 0. Plain list: exit 0, 0 bytes. "no store file created" (<a href="#ev-basic">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a> <a class="id" href="#S10">S10</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td><b>One item</b><br><code>add "buy milk"</code></td><td>stdout is exactly <code>[{"id": 1, "title": "buy milk", "done": false}]\n</code>, exit 0</td><td>That exact line. <code>od -c</code> ends with <code>} ] \n</code>, exit 0 (<a href="#ev-basic">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a> <a class="id" href="adr.html#D2">D2</a> <a class="id" href="#S8">S8</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td><b>Newline in a title</b><br><code>$'line one\n  9  [x]  forged'</code></td><td>stdout is one line, the title comes back escaped, and <code>jq length</code> gives the real item count.</td><td><code>wc -l</code> = 1, <code>jq length</code> = 4 for 4 items, title <code>"line one\n  9  [x]  forged"</code>. Plain <code>list</code> still shows a forged row 9 (<a href="#ev-hostile">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a></td><td><span class="sev high">high</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td><b>Quotes, backslash, tab, empty title</b></td><td>Escaped as <code>\"</code>, <code>\\</code>, <code>\t</code> and <code>""</code>. <code>jq -r</code> gives back each original string byte for byte.</td><td><code>"say \"hi\" \\ ok"</code>, <code>"a\tb"</code>, <code>""</code>. <code>cmp</code> of <code>jq -j</code> against the input passes for all 4 (<a href="#ev-hostile">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td><b>Unicode title</b><br><code>café ☕</code></td><td>stdout contains <code>"café ☕"</code> and no bytes above 0x7F. <code>jq -r '.[0].title'</code> prints <code>café ☕</code>.</td><td><code>[{"id": 1, "title": "café ☕", "done": false}]</code>. 0 bytes above 0x7F. <code>jq -r</code> gives <code>café ☕</code> (<a href="#ev-unicode">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td><b>Id 1000 or more</b></td><td><code>"id": 1000</code> as a JSON integer with no padding</td><td><code>"id": 1000</code>, and <code>jq '.[].id'</code> gives <code>1</code>, <code>1000</code> (<a href="#ev-handedit">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E7"><td><span class="id">E7</span></td><td><b>Finished and open items together</b></td><td><code>done</code> values are JSON booleans. <code>jq '[.[] | select(.done)] | length'</code> counts the finished ones.</td><td><code>map(.done|type)</code> = <code>["boolean","boolean"]</code>, finished count 1 (<a href="#ev-handedit">evidence</a>)</td><td><a class="id" href="adr.html#D2">D2</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E8"><td><span class="id">E8</span></td><td><b>Flag before the subcommand</b><br><code>todo --json list</code></td><td>Exit 2, stdout empty, stderr ends <code>todo: error: unrecognized arguments: --json</code></td><td>Exactly that. <code>add --json</code> and <code>done --json</code> are rejected the same way (<a href="#ev-reject">evidence</a>)</td><td><a class="id" href="adr.html#D3">D3</a> <a class="id" href="#S13">S13</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E9"><td><span class="id">E9</span></td><td><b>No flag</b><br><code>todo list</code></td><td>Output is byte-for-byte what <code>195c2d2</code> prints for the same store, and <code>test_add_list_done</code> still passes</td><td><code>cmp</code> identical on 3 stores (plain, hostile at 85 bytes, hand-edited). <code>test_add_list_done ... ok</code> (<a href="#ev-hostile">evidence</a>, <a href="#ev-unit">unit</a>)</td><td><a class="id" href="adr.html#D5">D5</a> <a class="id" href="#S14">S14</a></td><td><span class="sev high">high</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E10"><td><span class="id">E10</span></td><td><b>Script runs against an old version</b><br><code>list --json</code> on <code>195c2d2</code></td><td>Exit 2, stdout empty, stderr <code>todo: error: unrecognized arguments: --json</code></td><td>Exactly that (<a href="#ev-reject">evidence</a>)</td><td><a class="id" href="adr.html#D3">D3</a> <a class="id" href="#S13">S13</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E11"><td><span class="id">E11</span></td><td><b>Store is zero bytes or corrupt</b></td><td>Exit 1, stdout empty, stderr ends <code>json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</code></td><td>Zero bytes: exactly that. A truncated store also gives exit 1 with 0 bytes on stdout, and stderr says <code>Unterminated string …</code> (<a href="#ev-corrupt">evidence</a>)</td><td><a class="id" href="adr.html#D4">D4</a> <a class="id" href="#S11">S11</a> <a class="id" href="#S12">S12</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E12"><td><span class="id">E12</span></td><td><b><code>add</code> runs during <code>list --json</code></b></td><td>Each read either prints a valid array with exit 0, or gives exit 1 with an empty stdout. Never invalid JSON with exit 0.</td><td>185 reads during 200 adds: 185 were valid arrays with exit 0, 0 were bad. The torn-write window was never hit, so the exit 1 branch is proven by E11 instead (<a href="#ev-race">evidence</a>)</td><td><a class="id" href="adr.html#D4">D4</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E13"><td><span class="id">E13</span></td><td><b>stdout is not UTF-8</b><br><code>PYTHONIOENCODING=ascii</code>, title <code>café ☕</code></td><td><code>list --json</code> prints <code>"café ☕"</code>, exit 0. Plain <code>list</code> fails with <code>UnicodeEncodeError</code> and exit 1, as it does on <code>195c2d2</code>.</td><td>JSON: exit 0 with the escaped title. Plain list: <code>UnicodeEncodeError</code> and exit 1, on both the new code and <code>195c2d2</code> (<a href="#ev-unicode">evidence</a>)</td><td><a class="id" href="adr.html#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E14"><td><span class="id">E14</span></td><td><b>Store item has an extra key</b><br><code>"due": "2026-10-02"</code></td><td>The key appears in <code>--json</code> output with the same value. Plain <code>list</code> ignores it.</td><td><code>jq -r '.[1].due'</code> gives <code>2026-10-02</code>. Plain output is identical to <code>195c2d2</code> (<a href="#ev-handedit">evidence</a>)</td><td><a class="id" href="adr.html#D2">D2</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+      <tr id="E15"><td><span class="id">E15</span></td><td><b>Store top level is <code>{}</code></b><br>added during the build, from the ADR's "Not guarded" risk</td><td><code>list --json</code> prints <code>{}</code>, exit 0. Plain <code>list</code> prints nothing, exit 0, as on <code>195c2d2</code>. This is an accepted risk, not a guarantee.</td><td>Exactly that (<a href="#ev-obj">evidence</a>)</td><td><a class="id" href="adr.html#D4">D4</a></td><td><span class="sev low">low</span></td><td><span class="pill pass">pass</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix</h2>
+  <div class="scroll"><table class="matrix">
+    <thead>
+      <tr><th rowspan="2">Case</th><th colspan="4" class="grp">Conditions</th><th colspan="2" class="grp">Outcome</th></tr>
+      <tr><th><code>--json</code></th><th>Store has items</th><th>Special-char titles</th><th>ASCII-only stdout</th><th>Expected</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> Plain list</th><td class="n">no</td><td class="y">yes</td><td class="n">no</td><td class="n">no</td><td><code>  1  [x]  buy milk</code>, same bytes as <code>195c2d2</code> · exit 0</td><td><span class="pill pass">pass</span> <a href="#ev-basic">evidence</a></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> First run</th><td class="y">yes</td><td class="n">no file</td><td class="any">—</td><td class="any">—</td><td><code>[]\n</code> · exit 0</td><td><span class="pill pass">pass</span> <a href="#ev-basic">evidence</a></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> Happy path</th><td class="y">yes</td><td class="y">yes</td><td class="n">no</td><td class="n">no</td><td><code>[{"id": 1, "title": "buy milk", "done": true}, {"id": 2, "title": "call mum", "done": false}]\n</code> · exit 0</td><td><span class="pill pass">pass</span> <a href="#ev-basic">evidence</a></td></tr>
+      <tr id="C4"><th scope="row"><span class="id">C4</span> Hostile titles</th><td class="y">yes</td><td class="y">yes</td><td class="y">newline, quotes, tab</td><td class="n">no</td><td>One line on stdout · <code>jq length</code> = item count · <code>jq -r</code> returns each title unchanged · exit 0</td><td><span class="pill pass">pass</span> <a href="#ev-hostile">evidence</a></td></tr>
+      <tr id="C5"><th scope="row"><span class="id">C5</span> Unicode, JSON</th><td class="y">yes</td><td class="y">yes</td><td class="y">café ☕</td><td class="y">yes</td><td><code>[{"id": 1, "title": "café ☕", "done": false}]\n</code> · exit 0</td><td><span class="pill pass">pass</span> <a href="#ev-unicode">evidence</a></td></tr>
+      <tr id="C6"><th scope="row"><span class="id">C6</span> Unicode, plain</th><td class="n">no</td><td class="y">yes</td><td class="y">café ☕</td><td class="y">yes</td><td><code>UnicodeEncodeError</code> traceback · exit 1, unchanged from today</td><td><span class="pill pass">pass</span> <a href="#ev-unicode">evidence</a></td></tr>
+      <tr id="C7"><th scope="row"><span class="id">C7</span> Corrupt store</th><td class="y">yes</td><td class="n">zero bytes</td><td class="any">—</td><td class="any">—</td><td>stdout empty · <code>JSONDecodeError</code> traceback · exit 1</td><td><span class="pill pass">pass</span> <a href="#ev-corrupt">evidence</a></td></tr>
+      <tr id="C8"><th scope="row"><span class="id">C8</span> Flag before cmd</th><td class="n">before <code>list</code></td><td class="any">—</td><td class="any">—</td><td class="any">—</td><td>stdout empty · <code>unrecognized arguments: --json</code> · exit 2</td><td><span class="pill pass">pass</span> <a href="#ev-reject">evidence</a></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="evidence">
+  <h2>Evidence</h2>
+  <p class="callout"><b>Setup</b>Everything ran from a fresh <code>S=$(mktemp -d)</code>, with a new <code>TODO_FILE=$S/&lt;case&gt;.store</code> for each case. <code>new</code> is <code>PYTHONPATH=&lt;repo&gt; python3 -m todo</code>. <code>old</code> is the same command on <code>git archive 195c2d2 todo | tar -x -C $S/old</code>. Python 3.12 and <code>jq</code> 1.x on macOS (Darwin 24.5), under zsh.</p>
+  <details class="evidence" id="ev-red">
+    <summary><code>python3 -m unittest discover tests</code> before T2<span class="pill fail">1 error, as intended</span></summary>
+    <pre>  File "todo/cli.py", line 14, in main
+    args = parser.parse_args(argv)
+  ...
+SystemExit: 2
+Ran 3 tests in 0.004s
+FAILED (errors=1)</pre>
+    <p>T1's test fails on the old code because <code>list</code> rejects <code>--json</code>.</p>
+  </details>
+  <details class="evidence" id="ev-unit" open>
+    <summary><code>python3 -m unittest discover tests -v</code><span class="pill pass">3 passed</span></summary>
+    <pre>test_add_list_done (test_cli.CliTest.test_add_list_done) ... ok
+test_done_unknown_id (test_cli.CliTest.test_done_unknown_id) ... ok
+test_list_json (test_cli.CliTest.test_list_json) ... ok
+Ran 3 tests in 0.003s
+OK</pre>
+    <p>T1 now passes, and <code>test_add_list_done</code> still passes (<a class="id" href="#E9">E9</a>). The unit test also covers <a class="id" href="#E1">E1</a>–<a class="id" href="#E5">E5</a> and <a class="id" href="#E7">E7</a> in-process.</p>
+  </details>
+  <details class="evidence" id="ev-basic">
+    <summary><code>new list --json</code> on a missing, one-item and two-item store<span class="pill pass">E1 E2 C1 C2 C3</span></summary>
+    <pre>$ new list --json &gt; e1.out; echo "exit $?"; od -c e1.out
+exit 0
+0000000    [   ]  \n
+$ new list &gt; e1p.out        → exit 0, stdout 0 bytes
+$ test -e $TODO_FILE        → no store file created
+
+$ new add "buy milk"; new list --json | od -c | head; new list --json
+1
+…
+0000040    "   d   o   n   e   "   :       f   a   l   s   e   }   ]  \n
+[{"id": 1, "title": "buy milk", "done": false}]
+exit 0
+
+$ new add "buy milk"; new add "call mum"; new done 1; new list --json
+[{"id": 1, "title": "buy milk", "done": true}, {"id": 2, "title": "call mum", "done": false}]
+exit 0
+$ new list &gt; c1.new; old list &gt; c1.old; cat c1.new; cmp c1.new c1.old &amp;&amp; echo identical bytes
+  1  [x]  buy milk
+  2  [ ]  call mum
+identical bytes</pre>
+    <p>Proves <a class="id" href="#E1">E1</a>, <a class="id" href="#E2">E2</a>, <a class="id" href="#C1">C1</a>, <a class="id" href="#C2">C2</a> and <a class="id" href="#C3">C3</a>.</p>
+  </details>
+  <details class="evidence" id="ev-hostile">
+    <summary><code>new list --json</code> with newline, quote, backslash, tab and empty titles<span class="pill pass">E3 E4 E9 C4</span></summary>
+    <pre>$ t1=$'line one\n  9  [x]  forged'; t2='say "hi" \ ok'; t3=$'a\tb'; t4=''
+$ for t in "$t1" "$t2" "$t3" "$t4"; do new add "$t"; done
+$ new list --json &gt; c4.out; echo "exit $?"; cat c4.out
+exit 0
+[{"id": 1, "title": "line one\n  9  [x]  forged", "done": false}, {"id": 2, "title": "say \"hi\" \\ ok", "done": false}, {"id": 3, "title": "a\tb", "done": false}, {"id": 4, "title": "", "done": false}]
+$ wc -l &lt; c4.out; jq length c4.out
+1
+4
+$ # per title: printf '%s' "$t" &gt; want; jq -j ".[$i].title" c4.out &gt; got; cmp -s want got
+.[0].title round-trips byte for byte
+.[1].title round-trips byte for byte
+.[2].title round-trips byte for byte
+.[3].title round-trips byte for byte
+$ new list                  # contrast: plain output still forges item 9
+  1  [ ]  line one
+  9  [x]  forged
+  2  [ ]  say "hi" \ ok
+  3  [ ]  a	b
+  4  [ ]
+$ new list &gt; e9.new; old list &gt; e9.old; cmp e9.new e9.old &amp;&amp; echo "identical bytes ($(wc -c &lt; e9.new) bytes)"
+identical bytes (85 bytes)</pre>
+    <p>Proves <a class="id" href="#E3">E3</a>, <a class="id" href="#E4">E4</a>, <a class="id" href="#C4">C4</a>, and plain output staying the same on a hostile store (<a class="id" href="#E9">E9</a>).</p>
+  </details>
+  <details class="evidence" id="ev-unicode">
+    <summary><code>new list --json</code> with <code>café ☕</code>, UTF-8 and <code>PYTHONIOENCODING=ascii</code><span class="pill pass">E5 E13 C5 C6</span></summary>
+    <pre>$ new add "café ☕"; new list --json &gt; e5.out; echo "exit $?"; cat e5.out
+exit 0
+[{"id": 1, "title": "café ☕", "done": false}]
+$ LC_ALL=C tr -d '\000-\177' &lt; e5.out | wc -c
+0
+$ jq -r '.[0].title' e5.out
+café ☕
+$ PYTHONIOENCODING=ascii new list --json; echo "exit $?"
+[{"id": 1, "title": "café ☕", "done": false}]
+exit 0
+$ PYTHONIOENCODING=ascii new list 2&gt;&amp;1 | tail -1          # exit 1
+UnicodeEncodeError: 'ascii' codec can't encode character '\xe9' in position 13: ordinal not in range(128)
+$ PYTHONIOENCODING=ascii old list 2&gt;&amp;1 | tail -1          # exit 1, same as before
+UnicodeEncodeError: 'ascii' codec can't encode character '\xe9' in position 13: ordinal not in range(128)</pre>
+    <p>Proves <a class="id" href="#E5">E5</a>, <a class="id" href="#E13">E13</a>, <a class="id" href="#C5">C5</a> and <a class="id" href="#C6">C6</a>.</p>
+  </details>
+  <details class="evidence" id="ev-handedit">
+    <summary><code>new list --json</code> on a hand-edited store with id 1000 and an extra key<span class="pill pass">E6 E7 E14</span></summary>
+    <pre>$ printf '%s' '[{"id": 1, "title": "buy milk", "done": true}, {"id": 1000, "title": "big id", "done": false, "due": "2026-10-02"}]' &gt; $TODO_FILE
+$ new list --json; echo "exit $?"
+[{"id": 1, "title": "buy milk", "done": true}, {"id": 1000, "title": "big id", "done": false, "due": "2026-10-02"}]
+exit 0
+$ new list --json | jq '.[].id'
+1
+1000
+$ new list --json | jq -c 'map(.done|type)'; new list --json | jq '[.[] | select(.done)] | length'
+["boolean","boolean"]
+1
+$ new list --json | jq -r '.[1].due'
+2026-10-02
+$ new list; new list &gt; e6.new; old list &gt; e6.old; cmp e6.new e6.old &amp;&amp; echo "plain identical to 195c2d2"
+  1  [x]  buy milk
+1000  [ ]  big id
+plain identical to 195c2d2</pre>
+    <p>Proves <a class="id" href="#E6">E6</a>, <a class="id" href="#E7">E7</a> and <a class="id" href="#E14">E14</a>.</p>
+  </details>
+  <details class="evidence" id="ev-reject">
+    <summary><code>--json</code> in the wrong place, and on <code>195c2d2</code><span class="pill pass">E8 E10 C8</span></summary>
+    <pre>$ new --json list &gt; o 2&gt; e; echo "exit $?  stdout $(wc -c &lt; o) bytes"; tail -1 e
+exit 2  stdout 0 bytes
+todo: error: unrecognized arguments: --json
+$ new add --json x          → exit 2  stdout 0 bytes  todo: error: unrecognized arguments: --json
+$ new done --json 1         → exit 2  stdout 0 bytes  todo: error: unrecognized arguments: --json
+$ old list --json &gt; o 2&gt; e; echo "exit $?  stdout $(wc -c &lt; o) bytes"; tail -1 e
+exit 2  stdout 0 bytes
+todo: error: unrecognized arguments: --json
+$ jq length $TODO_FILE      # the rejected add wrote nothing
+2</pre>
+    <p>Proves <a class="id" href="#E8">E8</a>, <a class="id" href="#E10">E10</a> and <a class="id" href="#C8">C8</a>.</p>
+  </details>
+  <details class="evidence" id="ev-corrupt">
+    <summary><code>new list --json</code> on a zero-byte and a truncated store<span class="pill pass">E11 C7</span></summary>
+    <pre>$ : &gt; $TODO_FILE; new list --json &gt; o 2&gt; e; echo "exit $?  stdout $(wc -c &lt; o) bytes"; tail -1 e
+exit 1  stdout 0 bytes
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+$ printf '[{"id": 1, "tit' &gt; $TODO_FILE; new list --json &gt; o 2&gt; e; ...
+exit 1  stdout 0 bytes
+json.decoder.JSONDecodeError: Unterminated string starting at: line 1 column 12 (char 11)</pre>
+    <p>Proves <a class="id" href="#E11">E11</a> and <a class="id" href="#C7">C7</a>: stdout is never half-written JSON.</p>
+  </details>
+  <details class="evidence" id="ev-race">
+    <summary>200 <code>add</code>s in the background while <code>list --json</code> runs in a loop<span class="pill pass">185 / 185 valid</span></summary>
+    <pre>$ ( for i in $(seq 200); do python3 -m todo add "item $i"; done; touch writer.done ) &amp;
+$ while [ ! -e writer.done ]; do
+    python3 -m todo list --json &gt; r.out; rc=$?
+    # rc 0 and jq -e 'type=="array"' → ok · rc 1 and empty r.out → empty1 · anything else → BAD
+  done; wait
+reads: 185  valid array+exit0: 185  empty stdout+exit1: 0  BAD: 0
+final store items: 200  (200 adds attempted)
+add failures: 0</pre>
+    <p>Proves <a class="id" href="#E12">E12</a> for these 185 reads. The race window in <code>save()</code> is small, and no read landed in it. That the exit 1 branch leaves stdout empty is shown by <a href="#ev-corrupt">ev-corrupt</a>.</p>
+  </details>
+  <details class="evidence" id="ev-obj">
+    <summary><code>new list --json</code> on a <code>{}</code> store<span class="pill pass">E15</span></summary>
+    <pre>$ printf '{}' &gt; $TODO_FILE
+$ new list --json; echo "exit $?"
+{}
+exit 0
+$ new list; old list        → both print nothing, exit 0</pre>
+    <p>Confirms the ADR's "Not guarded" risk behaves as described (<a class="id" href="#E15">E15</a>).</p>
+  </details>
+</section>
+
+<section id="follow-ups">
+  <h2>Follow-ups</h2>
+  <div class="callout risk"><b>Fix the ADR's expected text</b><p>In <code>adr.html</code>, change the expected stdout for E5, E13 and C5 to <code>"café ☕"</code>. It's a wording fix, not a decision change, so I left the ADR as it is for you to approve.</p></div>
+  <div class="callout risk"><b>Still accepted, still present</b><p>The non-atomic <code>save()</code> race (<a class="id" href="#E12">E12</a>, not hit in 185 reads) and the unguarded <code>{}</code> store (<a class="id" href="#E15">E15</a>) are unchanged, as <a class="id" href="adr.html#D4">D4</a> intends. If scripts that poll the list start seeing exit 1, open the atomic-write follow-up (temp file + <code>os.replace</code>).</p></div>
+  <div class="callout"><b>Lint warning</b><p><code>check.py</code> warns that this record has 15 E# for one micro feature, over the soft limit of 12. They are all small variations on one flag, so I kept it as one record.</p></div>
+  <div class="callout"><b>Not committed</b><p>The diff touches <code>todo/cli.py</code>, <code>tests/test_cli.py</code> and <code>README.md</code>, and is still in the working tree. Tell me when to commit it.</p></div>
+</section>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "blueprint-skill-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "python3 -m unittest discover tests && node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

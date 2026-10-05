@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADR-0001 Short-link expiry chosen by the creator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0001 · decision record</span>
+    <h1>Short-link expiry chosen by the creator</h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>2<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill pass">Accepted</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>B</dd></div>
+    <div><dt>Repo</dt><dd>shorty</dd></div>
+    <div><dt>Published</dt><dd><a href="http://127.0.0.1:47615/0001-short-link-expiry/adr.html">Local review page</a></dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>Q1–Q5 answered on the page</small></li>
+    <li class="done"><span>Decide</span><small>ADR accepted 2026-10-01</small></li>
+    <li><span>Build</span><small>verify E1–E16 and C1–C11</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary <span class="tag">decision at a glance</span></h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd>New links cannot expire: <code>POST /links</code> ignores an expiry field and <code>GET /:code</code> redirects while the process lives.</dd></div>
+    <div><dt>Decision</dt><dd>Accept optional integer <code>expiresInSeconds</code> from 1 through 2,592,000; retain URL-only calls, store a UTC deadline in the existing Map, and delete lazily with <code>404 not found</code> at the cutoff. Return <code>expiresAt</code> only for finite links; use <code>Cache-Control: no-store</code> on their 302 responses.</dd></div>
+    <div><dt>Verify by</dt><dd>Exercise both API paths against a real server: 201 for an expiring link, 302 before the deadline, 404 at/after it; check the 30-day bound, invalid inputs, legacy redirects, response headers, and loss of links after process restart.</dd></div>
+  </dl>
+</section>
+
+<section id="context">
+  <h2>Context <span class="tag">facts before design</span></h2>
+  <p>The current handler stores only normalized URLs and returns <code>{"code":"…"}</code> (<a class="id" href="explore.html#F1">F1</a>); a supplied one-second expiry was observed to have no effect (<a class="id" href="explore.html#F6">F6</a>). Resolution redirects without a deadline check or cache directive (<a class="id" href="explore.html#F2">F2</a>). The state is already volatile across process restarts (<a class="id" href="explore.html#F3">F3</a>), and the only documented creation client is the API (<a class="id" href="explore.html#F4">F4</a>). New finite redirects need a no-store directive for compliant caches, but that cannot revoke redirects cached before deployment (<a class="id" href="explore.html#F7">F7</a>).</p>
+</section>
+
+<section id="micro">
+  <h2>Micro features <span class="tag">one API contract, two behaviours</span></h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt">Creation: the API caller optionally requests a link lifetime of 1–2,592,000 seconds.</p><p class="meta">depends on existing POST /links · size S · omitted expiry preserves the old response</p></div></li>
+    <li id="M2"><span class="id">M2</span><div><p class="stmt">Resolution: a finite link redirects only before its stored cutoff.</p><p class="meta">depends on M1 recording an epoch deadline · size S · expired entries are deleted on lookup</p></div></li>
+  </ol>
+</section>
+
+<section id="answers">
+  <h2>Answers <span class="tag">saved in answers.json at 2026-09-30 19:53:08 UTC</span></h2>
+  <p>Source: the user's selections on the Explore page, written to <code>docs/adr/0001-short-link-expiry/answers.json</code>. All five questions were answered; no default selection was substituted.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Question</th><th>Selected answer</th><th>Drives</th></tr></thead>
+    <tbody>
+      <tr id="Q1"><th scope="row"><a class="id" href="explore.html#Q1">Q1</a></th><td>C · optional integer <code>expiresInSeconds</code>, 1–2,592,000 (30 days)</td><td><a class="id" href="#D1">D1</a></td></tr>
+      <tr id="Q2"><th scope="row"><a class="id" href="explore.html#Q2">Q2</a></th><td>A · omitted expiry is non-expiring and retains the URL-only 201 and redirect contract</td><td><a class="id" href="#D1">D1</a> <a class="id" href="#D3">D3</a></td></tr>
+      <tr id="Q3"><th scope="row"><a class="id" href="explore.html#Q3">Q3</a></th><td>A · expired link is deleted on lookup and returns <code>404 not found</code></td><td><a class="id" href="#D3">D3</a></td></tr>
+      <tr id="Q4"><th scope="row"><a class="id" href="explore.html#Q4">Q4</a></th><td>A · no restart guarantee; existing in-memory Map with lazy deletion</td><td><a class="id" href="#D2">D2</a></td></tr>
+      <tr id="Q5"><th scope="row"><a class="id" href="explore.html#Q5">Q5</a></th><td>A · API request only; document the JSON field and an example</td><td><a class="id" href="#D4">D4</a></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout assume"><b>Interpretation for review</b><p>Q1-C specifies the duration and cap but not the finite 201 response body. This proposal keeps the Explore page's finite-link <code>expiresAt</code> field (<a class="id" href="explore.html#E2">E2</a>), calculated as a UTC ISO timestamp. ADR acceptance includes that interpretation; it does not change URL-only responses.</p></div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions <span class="tag">accepted · 2026-10-01</span></h2>
+  <ol class="ledger">
+    <li id="D1"><span class="id">D1</span><div><p class="stmt">On <code>POST /links</code>, normalize the URL first; if <code>expiresInSeconds</code> is present, require a JSON integer in [1, 2,592,000]. Sample <code>Date.now()</code> once, set <code>deadlineMs = now + seconds × 1000</code>, and return 201 with <code>{"code":"…","expiresAt":"…Z"}</code>. If omitted, return only <code>{"code":"…"}</code>; malformed duration returns <code>400 bad expiry</code> without storing a code.</p><p><a class="id" href="explore.html#F1">F1</a>, <a class="id" href="explore.html#F5">F5</a>, <a class="id" href="#Q1">Q1</a>, and <a class="id" href="#Q2">Q2</a> require a bounded, opt-in extension. Rejected the 365-day limit (<a class="id" href="explore.html#Q1">Q1</a>-A), absolute client timestamp (Q1-B), and changing URL-only replies (Q2-B/C). A previously ignored but invalid expiry field will now fail explicitly.</p><p class="meta">M1 · deadline stored as epoch milliseconds, response formatted with toISOString(); bad URL still wins over bad expiry</p></div></li>
+    <li id="D2"><span class="id">D2</span><div><p class="stmt">Keep one process-local Map whose values hold the normalized URL and an optional deadline; check the deadline on each GET and delete an expired entry only when looked up. No timer, database, or migration.</p><p><a class="id" href="#Q4">Q4</a> accepts volatility described by <a class="id" href="explore.html#F3">F3</a>. Choose <a class="id" href="explore.html#O1">O1</a> over periodic sweeping (<a class="id" href="explore.html#O2">O2</a>) and persistent storage (<a class="id" href="explore.html#O3">O3</a>): a timer cannot replace per-GET enforcement, while persistence would add deployment work not requested.</p><p class="meta">M1 + M2 · no restart durability; unvisited expired entries stay resident</p></div></li>
+    <li id="D3"><span class="id">D3</span><div><p class="stmt">On GET, an unknown or expired code returns the existing <code>404 not found</code> without the target URL; an expired code is removed. A finite code redirects with the original 302 <code>Location</code> only while <code>Date.now() &lt; deadlineMs</code>, with <code>Cache-Control: no-store</code>. A code without a deadline retains its original 302 and headers.</p><p><a class="id" href="#Q3">Q3</a> rejects 410 with tombstones (Q3-B); <a class="id" href="#Q2">Q2</a> preserves old clients (<a class="id" href="explore.html#F2">F2</a>). <a class="id" href="explore.html#F7">F7</a> warrants no-store only for finite redirects so cooperating caches recheck the origin. Previously cached 302s cannot be recalled.</p><p class="meta">M2 · at the cutoff the original target is never served again by this entry</p></div></li>
+    <li id="D4"><span class="id">D4</span><div><p class="stmt">Expose expiry only through the existing JSON API; document the optional field, 30-day bound, finite response, 404 cutoff, restart limit, and no-store header in README.</p><p><a class="id" href="#Q5">Q5</a> selects API-only: no UI or identity exists (<a class="id" href="explore.html#F4">F4</a>). Reject the form proposed by Q5-B; no auth or front-end deployment is added.</p><p class="meta">M1 · caller-facing contract, not a new endpoint</p></div></li>
+  </ol>
+</section>
+
+<section id="architecture">
+  <h2>Architecture <span class="tag">target · one Node process</span></h2>
+  <figure class="arch">
+    <div class="tier" data-tier="Callers">
+      <div class="node ext">Creator<small>POST /links · optional duration</small></div>
+      <div class="node ext">Visitor / HTTP cache<small>GET /:code · finite 302 no-store</small></div>
+    </div>
+    <div class="link">HTTP requests and responses</div>
+    <div class="tier" data-tier="Server">
+      <div class="node">HTTP listener<small>node:http · unchanged</small></div>
+      <span class="hl">dispatch</span>
+      <div class="node chg">Creation branch<small>validate &amp; sample deadline</small></div>
+      <div class="node chg">Resolution branch<small>compare, 302 or delete + 404</small></div>
+    </div>
+    <div class="link both">set / get / delete by code</div>
+    <div class="tier" data-tier="State">
+      <div class="node chg">In-process Map<small>code → {url, deadlineMs?}</small></div>
+      <div class="node new">Optional UTC deadline<small>epoch milliseconds; ISO only in finite 201</small></div>
+    </div>
+    <figcaption><div class="legend"><span><i class="new"></i>new data</span><span><i class="chg"></i>changed</span><span><i></i>unchanged</span><span><i class="ext"></i>external</span><span><i class="gone"></i>removed (none)</span></div>The same volatile Map serves both micro features. No background sweep, persistent store, browser form, or component removal.</figcaption>
+  </figure>
+</section>
+
+<section id="flows">
+  <h2>Flows <span class="tag">normal paths and failures</span></h2>
+  <h3>M1 · creation and validation</h3>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>Creator</b><b>POST handler</b><b>Map</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">POST /links · JSON URL, optional expiresInSeconds</div>
+      <div class="msg self" style="--from:1">parse JSON; normalize URL before validating duration</div>
+      <div class="seq-frag" data-label="alt · valid finite duration">
+        <div class="msg self" style="--from:1">require integer 1..2,592,000; capture one now; compute deadline</div>
+        <div class="msg" style="--from:1;--to:2">set(code, {url, deadlineMs})</div>
+        <div class="msg reply" style="--from:1;--to:0">201 {"code":"…","expiresAt":"…Z"}</div>
+        <div class="seq-else">else · duration omitted</div>
+        <div class="msg" style="--from:1;--to:2">set(code, {url})</div>
+        <div class="msg reply" style="--from:1;--to:0">201 {"code":"…"}</div>
+        <div class="seq-else">else · malformed JSON or bad URL</div>
+        <div class="msg reply" style="--from:1;--to:0">400 bad url · no Map write</div>
+        <div class="seq-else">else · invalid duration, valid URL</div>
+        <div class="msg reply" style="--from:1;--to:0">400 bad expiry · no Map write</div>
+      </div>
+    </div>
+    <figcaption>Generate a code only after validation. The same sampled instant produces the stored epoch deadline and returned ISO UTC string (<a class="id" href="#D1">D1</a>).</figcaption>
+  </figure>
+  <h3>M2 · resolution, expiry, and missing codes</h3>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>Visitor</b><b>GET handler</b><b>Map</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">GET /:code</div>
+      <div class="msg" style="--from:1;--to:2">get(code)</div>
+      <div class="msg reply" style="--from:2;--to:1">record or absent</div>
+      <div class="seq-frag" data-label="alt · finite deadline in future">
+        <div class="msg self" style="--from:1">compare Date.now() &lt; deadlineMs</div>
+        <div class="msg reply" style="--from:1;--to:0">302 Location: URL · Cache-Control: no-store</div>
+        <div class="seq-else">else · now at/after deadline</div>
+        <div class="msg" style="--from:1;--to:2">delete(code)</div>
+        <div class="msg reply" style="--from:1;--to:0">404 not found</div>
+        <div class="seq-else">else · record without deadline</div>
+        <div class="msg reply" style="--from:1;--to:0">302 Location: URL · legacy headers</div>
+        <div class="seq-else">else · record absent / process restarted</div>
+        <div class="msg reply" style="--from:1;--to:0">404 not found</div>
+      </div>
+    </div>
+    <figcaption>Every finite GET uses server time at lookup; a 404 reveals no target (<a class="id" href="#D2">D2</a>, <a class="id" href="#D3">D3</a>).</figcaption>
+  </figure>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases <span class="tag">E1–E12 retained; E13–E16 added</span></h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>M#</th><th>Concrete scenario</th><th>Exact expected result</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td><a class="id" href="#M1">M1</a></td><td><code>{"url":"https://example.com"}</code>, no expiry field.</td><td>201 body has only <code>code</code>; Map entry has URL with no deadline. It redirects while the process lives.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td><a class="id" href="#M1">M1</a></td><td>Valid URL; <code>expiresInSeconds: 1</code>; server time sampled at <code>t</code>.</td><td>201 body has code and <code>expiresAt = new Date(t + 1000).toISOString()</code>; Map entry holds URL and <code>t + 1000</code> ms.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td><a class="id" href="#M1">M1</a></td><td>Valid URL, duration <code>0</code>, <code>-1</code>, <code>1.5</code>, <code>null</code>, <code>"1"</code>, <code>true</code>, or <code>[]</code>.</td><td>Each returns <code>400 bad expiry</code>; no code issued and no Map write.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td><a class="id" href="#M1">M1</a></td><td><code>expiresInSeconds: 31536001</code> (Explore's over-365-day example).</td><td><code>400 bad expiry</code>; no code issued and no Map write. It also exceeds the chosen 30-day cap.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td><a class="id" href="#M1">M1</a></td><td>Duration 1; <code>url: "nope"</code>.</td><td><code>400 bad url</code>, even though an expiry was supplied; no Map write.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td><a class="id" href="#M2">M2</a></td><td>Finite code looked up when <code>now &lt; deadlineMs</code>.</td><td>302 with original normalized <code>Location</code> and <code>Cache-Control: no-store</code>; entry retained.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E7"><td><span class="id">E7</span></td><td><a class="id" href="#M2">M2</a></td><td>Finite code looked up when <code>now == deadlineMs</code> or later.</td><td><code>404 not found</code>; entry deleted on this lookup; no target URL in response.</td><td><a class="id" href="#D2">D2</a> <a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E8"><td><span class="id">E8</span></td><td><a class="id" href="#M2">M2</a></td><td>Unknown code, or the same expired code requested again.</td><td>Each GET returns <code>404 not found</code>, with no target URL in body or headers.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E9"><td><span class="id">E9</span></td><td><a class="id" href="#M2">M2</a></td><td>Two lookups straddle <code>deadlineMs</code>.</td><td>GET evaluated before cutoff returns 302 with no-store; GET evaluated at/after cutoff returns 404 and removes the entry.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E10"><td><span class="id">E10</span></td><td><a class="id" href="#M2">M2</a></td><td>Process restarted before a one-day link's deadline.</td><td>GET returns <code>404 not found</code>: the old process's Map is gone; expiry is an upper bound, not an uptime guarantee.</td><td><a class="id" href="#D2">D2</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E11"><td><span class="id">E11</span></td><td><a class="id" href="#M2">M2</a></td><td>Finite redirect fetched through a compliant HTTP cache.</td><td>New 302 contains <code>Cache-Control: no-store</code>; compliant caches do not retain/reuse it. A previously cached 302 remains outside this change's control.</td><td><a class="id" href="#D3">D3</a> <a class="id" href="explore.html#F7">F7</a></td><td><span class="sev high">high</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E12"><td><span class="id">E12</span></td><td><a class="id" href="#M2">M2</a></td><td>Process timezone changes while a one-second finite link is active.</td><td>Stored epoch cutoff and GET comparison remain the same; its finite 201 <code>expiresAt</code> is UTC and ends in <code>Z</code>.</td><td><a class="id" href="#D1">D1</a> <a class="id" href="#D3">D3</a></td><td><span class="sev low">low</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E13"><td><span class="id">E13</span></td><td><a class="id" href="#M1">M1</a></td><td>Valid URL with <code>expiresInSeconds: 2592000</code> (exact upper bound).</td><td>201 with code and UTC <code>expiresAt</code> exactly 2,592,000 seconds after sampled <code>t</code>; Map stores that cutoff.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E14"><td><span class="id">E14</span></td><td><a class="id" href="#M1">M1</a></td><td>POST malformed JSON <code>{"url":</code>.</td><td>Existing <code>400 bad url</code>; no code issued and no Map write; duration validation is not reached.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E15"><td><span class="id">E15</span></td><td><a class="id" href="#M2">M2</a></td><td>GET a URL-only (no-deadline) code at any time before restart.</td><td>302 to the original normalized URL with legacy headers, without the new <code>Cache-Control: no-store</code> directive.</td><td><a class="id" href="#D3">D3</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E16"><td><span class="id">E16</span></td><td><a class="id" href="#M1">M1</a></td><td><code>expiresInSeconds: 2592001</code>, one second above the chosen cap.</td><td><code>400 bad expiry</code>; no code issued and no Map write.</td><td><a class="id" href="#D1">D1</a></td><td><span class="sev med">med</span></td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix <span class="tag">one per micro feature · all results planned</span></h2>
+  <h3>M1 · URL validity × duration input</h3>
+  <div class="scroll"><table class="matrix">
+    <thead><tr><th>Case</th><th>URL / JSON</th><th>Expiry field</th><th>Expected</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> Legacy request</th><td>valid URL</td><td>absent</td><td>201 <code>{"code":"…"}</code>; no stored deadline</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> Minimum</th><td>valid URL</td><td>1 second</td><td>201 code + UTC <code>expiresAt = t+1s</code>; stored deadline <code>t+1000ms</code></td><td><span class="pill">planned</span></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> Invalid duration</th><td>valid URL</td><td>0 or 31,536,001</td><td><code>400 bad expiry</code>; Map unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C4"><th scope="row"><span class="id">C4</span> Invalid URL</th><td><code>"nope"</code></td><td>1 second</td><td><code>400 bad url</code>; Map unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C9"><th scope="row"><span class="id">C9</span> Maximum</th><td>valid URL</td><td>2,592,000 seconds</td><td>201 code + UTC <code>expiresAt = t+30d</code>; stored deadline <code>t+2592000000ms</code></td><td><span class="pill">planned</span></td></tr>
+      <tr id="C10"><th scope="row"><span class="id">C10</span> Bad JSON</th><td>malformed JSON</td><td>unreadable</td><td><code>400 bad url</code>; Map unchanged</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C11"><th scope="row"><span class="id">C11</span> Just over cap</th><td>valid URL</td><td>2,592,001 seconds</td><td><code>400 bad expiry</code>; Map unchanged</td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>M2 · stored code × deadline state</h3>
+  <div class="scroll"><table class="matrix">
+    <thead><tr><th>Case</th><th>Code state</th><th>Deadline state</th><th>Expected</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr id="C5"><th scope="row"><span class="id">C5</span> Legacy</th><td>present</td><td>absent</td><td>302 original <code>Location</code>; no new no-store directive</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C6"><th scope="row"><span class="id">C6</span> Before cutoff</th><td>present</td><td>future</td><td>302 original <code>Location</code> with <code>Cache-Control: no-store</code></td><td><span class="pill">planned</span></td></tr>
+      <tr id="C7"><th scope="row"><span class="id">C7</span> At/past cutoff</th><td>present</td><td>now or past</td><td><code>404 not found</code>; entry deleted, no target disclosed</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C8"><th scope="row"><span class="id">C8</span> Missing/lost</th><td>absent / restarted</td><td>any</td><td><code>404 not found</code>; no target disclosed</td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="plan">
+  <h2>Plan <span class="tag">ordered build tasks, not yet started</span></h2>
+  <ol class="ledger">
+    <li id="T1"><span class="id">T1</span><div><p class="stmt">Add deterministic API regressions for URL-only and finite creation, the 1/2,592,000 bounds, invalid types, malformed JSON, and bad URL priority in <code>test/server.test.js</code>; observe failing expiry cases before changing the handler.</p><p class="meta">M1 · proves D1 · E1 E2 E3 E4 E5 E13 E14 E16 · C1 C2 C3 C4 C9 C10 C11</p></div></li>
+    <li id="T2"><span class="id">T2</span><div><p class="stmt">Implement <code>POST /links</code> field validation, single-snapshot deadline, Map value change, and finite <code>expiresAt</code> response in <code>server.js</code>; keep the URL-only response unchanged.</p><p class="meta">M1 · implements D1 D2 · E1 E2 E3 E4 E5 E12 E13 E14 E16 · C1 C2 C3 C4 C9 C10 C11</p></div></li>
+    <li id="T3"><span class="id">T3</span><div><p class="stmt">Add GET regressions with a controlled clock: before/at/after cutoff, repeat lookup, unknown code, legacy headers, and finite no-store header in <code>test/server.test.js</code>; observe failures before changing resolution.</p><p class="meta">M2 · proves D2 D3 · E6 E7 E8 E9 E11 E12 E15 · C5 C6 C7 C8</p></div></li>
+    <li id="T4"><span class="id">T4</span><div><p class="stmt">Implement per-GET deadline comparison and lazy deletion in <code>server.js</code>; preserve legacy 302, and add no-store only to finite redirects.</p><p class="meta">M2 · implements D2 D3 · E6 E7 E8 E9 E11 E12 E15 · C5 C6 C7 C8</p></div></li>
+    <li id="T5"><span class="id">T5</span><div><p class="stmt">Update <code>README.md</code> with a finite-link curl example, the exact 1–2,592,000-second range, UTC response, legacy omission, 404 expiry, cache header, and restart limitation.</p><p class="meta">M1 · implements D4 · documents D1 D2 D3 · E1 E2 E4 E10 E11 E13 E16 · C1 C2 C6 C7 C8 C9 C11</p></div></li>
+    <li id="T6"><span class="id">T6</span><div><p class="stmt">Run <code>npm test</code> and start a real <code>npm start</code> server; use HTTP requests to check creation, redirects, invalid inputs, cutoff, legacy calls, and a clean-process restart. Record exact commands and observations for each E# and C# in <code>build.html</code>, marking any unexercised case untested.</p><p class="meta">M2 · verifies D1 D2 D3 D4 across M1 and M2 · E1–E16 · C1–C11</p></div></li>
+  </ol>
+</section>
+
+<section id="consequences">
+  <h2>Consequences <span class="tag">trade-offs, rollout, rollback</span></h2>
+  <div class="callout risk"><b>Accepted trade-offs</b><p>The Map loses all links after restart; unvisited expired entries stay resident. Server wall-clock jumps can move the effective cutoff, and previously cached redirects can outlive the new no-store header. No background cleanup, persistence, or clock synchronization is added (<a class="id" href="#D2">D2</a>, <a class="id" href="#D3">D3</a>).</p></div>
+  <div class="callout assume"><b>Collision and visibility boundary</b><p>The existing six-character code generator can overwrite a live entry on collision (<a class="id" href="explore.html#F8">F8</a>); this ADR does not change the generator. Anyone who can call the unauthenticated API can create finite links, as today. HTTP statuses and the finite 201 timestamp make the change externally observable; there is no new telemetry pipeline.</p></div>
+  <div class="callout ok"><b>Rollout / rollback</b><p>Deploy <code>server.js</code>, tests, and README together; no persisted schema or migration. A rollback restores the prior handler and restarts the volatile process, losing in-memory links; no compatibility shim or feature flag is needed. Existing URL-only clients continue to receive the same 201 and 302 contracts when running the new version.</p></div>
+  <p>Out of scope: a browser form, creator identity, restart durability, periodic sweeping, collision repair, and revoking redirects cached before deployment. Accept this ADR before building.</p>
+</section>
+</main>
+</div>
+</body>
+</html>

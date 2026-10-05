@@ -1,0 +1,116 @@
+<header class="tb">
+  <div class="tb-title"><span class="tb-no">ADR-0001</span><h1>JSON output for todo list</h1></div>
+  <div class="tb-sheet"><span>Sheet</span><b>2<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill pass">Accepted</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Test Owner</dd></div>
+    <div><dt>Rev</dt><dd>B</dd></div>
+    <div><dt>Published</dt><dd>not yet</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="done"><a href="explore.html">Explore</a><small>1 question answered</small></li>
+    <li class="now"><a href="adr.html">Decide</a><small>accepted</small></li>
+    <li><span>Build</span><small>next</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd>Scripts can't parse the table output (<a class="id" href="explore.html#F1">F1</a>).</dd></div>
+    <div><dt>Decision</dt><dd>Add <code>--json</code>, printing every item with a done field.</dd></div>
+    <div><dt>Verify by</dt><dd>Pipe <code>todo list --json</code> into <code>python3 -m json.tool</code>.</dd></div>
+  </dl>
+</section>
+
+<section id="micro">
+  <h2>Micro features</h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt"><code>todo list --json</code> prints the list as a JSON array</p><p class="meta">size S</p></div></li>
+  </ol>
+</section>
+
+<section id="answers">
+  <h2>Answers</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Question</th><th>Answer</th><th>Drives</th></tr></thead>
+    <tbody><tr><td><a class="id" href="explore.html#Q1">Q1</a></td><td>A. Include done items</td><td><a class="id" href="#D1">D1</a></td></tr></tbody>
+  </table></div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions</h2>
+  <ol class="ledger">
+    <li id="D1"><span class="id">D1</span><div><p class="stmt">Print <code>[{"id", "title", "done"}]</code> with <code>ensure_ascii=False</code>.</p><p>Chose <a class="id" href="explore.html#O1">O1</a>.</p></div></li>
+    <li id="D2"><span class="id">D2</span><div><p class="stmt">Exit 0 on an empty list and print <code>[]</code>.</p></div></li>
+  </ol>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <figure class="arch">
+    <div class="tier" data-tier="CLI"><div class="node chg">todo list<small>todo/cli.py · + --json</small></div></div>
+    <div class="link">load()</div>
+    <div class="tier" data-tier="Data"><div class="node">~/.todo.store<small>or $TODO_FILE</small></div></div>
+  </figure>
+</section>
+
+<section id="flows">
+  <h2>Flows</h2>
+  <figure class="seq" style="--n:3">
+    <div class="seq-actors"><b>Shell</b><b>CLI</b><b>Store</b></div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1">todo list --json</div>
+      <div class="msg" style="--from:1;--to:2">load()</div>
+      <div class="msg reply" style="--from:2;--to:1">items</div>
+      <div class="msg self" style="--from:1">json.dumps(items)</div>
+      <div class="seq-frag" data-label="alt · store file missing">
+        <div class="msg reply" style="--from:2;--to:1">FileNotFoundError</div>
+        <div class="seq-else">else · store file present</div>
+        <div class="seq-note" style="--from:1;--to:2">Treated as an empty list (<a class="id" href="#D2">D2</a>).</div>
+      </div>
+      <div class="msg reply" style="--from:1;--to:0">JSON array</div>
+    </div>
+  </figure>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Expected</th><th>Handled by</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td>Empty list</td><td>Prints <code>[]</code>, exit 0</td><td><a class="id" href="#D2">D2</a></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td>Title "café ☕"</td><td>Printed as UTF-8</td><td><a class="id" href="#D1">D1</a></td><td><span class="pill">planned</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td>Store file missing</td><td>Prints <code>[]</code>, exit 0</td><td><a class="id" href="#S5">S5</a></td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="matrix">
+  <h2>Case matrix</h2>
+  <div class="scroll"><table class="matrix">
+    <thead>
+      <tr><th rowspan="2">Case</th><th colspan="2" class="grp">Conditions</th><th colspan="2" class="grp">Outcome</th></tr>
+      <tr><th>Store exists</th><th>Has items</th><th>Expected</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      <tr id="C1"><th scope="row"><span class="id">C1</span> Normal</th><td class="y">yes</td><td class="y">yes</td><td>JSON array of items</td><td><span class="pill">planned</span></td></tr>
+      <tr id="C2"><th scope="row"><span class="id">C2</span> Empty</th><td class="y">yes</td><td class="n">no</td><td><code>[]</code></td><td><span class="pill">planned</span></td></tr>
+      <tr id="C3"><th scope="row"><span class="id">C3</span> No store</th><td class="n">no</td><td class="any">—</td><td><code>[]</code></td><td><span class="pill">planned</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="plan">
+  <h2>Plan</h2>
+  <ol class="ledger">
+    <li id="T1"><span class="id">T1</span><div><p class="stmt">Add the --json flag</p><p class="meta">M1 · implements D1 D2 · proven by E1 E2 C1 C2</p></div></li>
+    <li id="T2"><span class="id">T2</span><div><p class="stmt">Treat a missing store as empty</p><p class="meta">M1 · implements D2 · proven by E3 C3</p></div></li>
+  </ol>
+</section>
+
+<section id="consequences">
+  <h2>Consequences</h2>
+  <div class="callout ok"><b>Rollback</b><p>Remove the flag. Nothing else reads it.</p></div>
+</section>

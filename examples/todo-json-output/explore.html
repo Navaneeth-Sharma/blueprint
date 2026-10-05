@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADR-0001 todo list --json</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" data-fonts media="print" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting sheet. Title block on top, sheet index in a left rail on wide screens,
+   prose held near 72ch, diagrams and tables run the full sheet width on grid paper. */
+:root {
+  --paper: #f2f4f6;        /* page ground */
+  --panel: #ffffff;        /* tables, cards, diagram frames */
+  --ink: #16212d;          /* text and diagram strokes */
+  --ink-2: #4f5d6c;        /* secondary text */
+  --line: #97a4b2;         /* title-block rules, lifelines, frames */
+  --rule: #d6dde4;         /* hairlines */
+  --grid: #e8edf2;         /* grid paper inside diagrams */
+  --accent: #1f55a0;       /* cyanotype blue: IDs, links, current phase */
+  --accent-tint: #e2eaf6;
+  --ok: #1b7446;   --ok-tint: #dff0e6;
+  --warn: #8a5a00; --warn-tint: #f7ebcf;
+  --bad: #b1261d;  --bad-tint: #f8e1de;
+  --muted: #5d6977; --muted-tint: #e8ecf0;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+    --accent: #82b1ee; --accent-tint: #172841;
+    --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+    --muted: #9ba7b4; --muted-tint: #1d2630;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e141b; --panel: #141c25; --ink: #e2e8ee; --ink-2: #9aa7b5; --line: #4f5e6f; --rule: #253140; --grid: #1a232e;
+  --accent: #82b1ee; --accent-tint: #172841;
+  --ok: #62c994; --ok-tint: #11281c; --warn: #e3b457; --warn-tint: #2b2210; --bad: #f28a7e; --bad-tint: #311613;
+  --muted: #9ba7b4; --muted-tint: #1d2630;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.6 var(--body);
+  padding-block: 28px 80px; padding-inline: max(16px, 3vw);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+main { overflow-wrap: break-word; }
+cite, a, .meta { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font: 500 .86em var(--mono); background: var(--muted-tint); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 400 12.5px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--rule); padding: 12px 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; font: inherit; }
+h1, h2, h3 { text-wrap: balance; }
+h3 { margin: 0; font: 600 16px/1.35 var(--body); }
+
+/* Shared label voice: title-block fields, table heads, tier names */
+.tb dt, .tldr dt, thead th, #toc b, .callout > b:first-child, .tb-sheet span, .tier::before {
+  font: 600 10.5px/1.3 var(--display); font-stretch: 105%;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2);
+}
+
+/* ---------- Sheet frame ---------- */
+.sheet { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+#toc { display: none; }
+@media (min-width: 1100px) {
+  .sheet { grid-template-columns: 172px minmax(0, 1fr); }
+  #toc { display: grid; gap: 1px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+}
+#toc b { margin-bottom: 8px; }
+#toc a { display: grid; grid-template-columns: 30px minmax(0, 1fr); padding: 4px 0; color: var(--ink-2); text-decoration: none; line-height: 1.35; }
+#toc a:hover { color: var(--ink); }
+#toc a span { font: 500 11.5px/1.6 var(--mono); color: var(--accent); }
+main { display: grid; gap: 52px; min-width: 0; counter-reset: sec step; }
+section { display: grid; gap: 16px; align-content: start; min-width: 0; scroll-margin-top: 20px; }
+section > * { margin: 0; min-width: 0; }
+section > p, section > ul, section > ol:not(.ledger), section > .callout { max-width: 72ch; }
+section > h2 {
+  counter-increment: sec;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding-bottom: 10px; border-bottom: 1.5px solid var(--ink);
+  font: 700 23px/1.2 var(--display); font-stretch: 82%; letter-spacing: .005em;
+}
+section > h2::before { content: "§" counter(sec); font: 500 13px var(--mono); color: var(--accent); }
+.tag { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-2); letter-spacing: .02em; }
+
+/* ---------- Title block ---------- */
+.tb { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--panel); border: 1.5px solid var(--ink); }
+.tb-title { display: grid; gap: 6px; padding: 18px 20px 16px; }
+.tb-no { font: 600 12.5px var(--mono); letter-spacing: .06em; color: var(--accent); }
+.tb h1 { margin: 0; font: 750 clamp(26px, 4vw, 36px)/1.06 var(--display); font-stretch: 78%; }
+.tb-sheet { display: grid; align-content: center; justify-items: center; gap: 2px; padding: 12px 22px; border-left: 1px solid var(--line); }
+.tb-sheet b { font: 700 34px/1 var(--display); font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.tb-sheet small { font-size: .5em; color: var(--ink-2); }
+.tb-meta { grid-column: 1 / -1; margin: 0; display: flex; flex-wrap: wrap; overflow: hidden; border-top: 1px solid var(--line); }
+.tb-meta > div { flex: 1 1 130px; min-width: 0; padding: 9px 14px 10px; margin: -1px 0 0 -1px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.tb-meta dd { margin: 3px 0 0; font: 500 13.5px/1.35 var(--mono); overflow-wrap: anywhere; }
+.tb-phases { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); counter-reset: ph; }
+.tb-phases li { counter-increment: ph; display: grid; gap: 1px; align-content: start; padding: 10px 14px 12px; border-left: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.tb-phases li:first-child { border-left: 0; }
+.tb-phases li::before { content: counter(ph) " · next"; font: 500 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.tb-phases li.done::before { content: counter(ph) " · done ✓"; color: var(--ok); }
+.tb-phases li.now::before { content: counter(ph) " · in review"; }
+.tb-phases li > :first-child { font: 700 17px/1.25 var(--display); font-stretch: 85%; color: var(--ink); text-decoration: none; }
+.tb-phases li.now { background: var(--accent); color: var(--panel); border-left-color: var(--accent); }
+.tb-phases li.now > :first-child { color: var(--panel); }
+
+/* ---------- Summary, callouts, IDs, pills ---------- */
+.tldr { margin: 0; background: var(--panel); border: 1px solid var(--rule); }
+.tldr > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 12px 18px; border-top: 1px solid var(--rule); }
+.tldr > div:first-child { border-top: 0; }
+.tldr dt { padding-top: 5px; }
+.tldr dd { margin: 0; font-size: 16.5px; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 560px) { .tldr > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.callout { padding: 12px 16px; background: var(--t, var(--accent-tint)); }
+.callout > b:first-child { display: block; margin-bottom: 4px; color: var(--c, var(--accent)); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 6px; }
+.callout.risk { --t: var(--bad-tint); --c: var(--bad); }
+.callout.assume { --t: var(--warn-tint); --c: var(--warn); }
+.callout.ok { --t: var(--ok-tint); --c: var(--ok); }
+
+.id { display: inline-block; padding: 0 6px; border-radius: 3px; font: 600 11.5px/1.55 var(--mono); color: var(--accent); background: var(--accent-tint); text-decoration: none; white-space: nowrap; vertical-align: 1px; }
+a.id:hover { background: var(--accent); color: var(--panel); }
+[id] { scroll-margin-top: 24px; }
+tr:target > *, li:target, .option:target, .q:target { background-color: var(--accent-tint); }
+.msg:target { background-color: var(--accent-tint); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font: 500 12px/1.3 var(--mono); white-space: nowrap; color: var(--c, var(--muted)); background: var(--t, var(--muted-tint)); }
+.pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.pass { --c: var(--ok); --t: var(--ok-tint); }
+.pill.fail { --c: var(--bad); --t: var(--bad-tint); }
+.pill.warn { --c: var(--warn); --t: var(--warn-tint); }
+.pill.info { --c: var(--accent); --t: var(--accent-tint); }
+.sev { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.sev.high { color: var(--bad); }
+.sev.med { color: var(--warn); }
+.sev.low { color: var(--muted); }
+
+/* ---------- Ledger: findings F#, decisions D#, tasks T# ---------- */
+.ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ledger > li { position: relative; padding: 12px 8px 12px 58px; border-bottom: 1px solid var(--rule); }
+.ledger > li > .id:first-child { position: absolute; left: 0; top: 16px; }
+.ledger > li > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 78ch; }
+.ledger p { margin: 0; }
+.ledger .stmt { font-weight: 600; }
+.ledger cite, .ledger .meta { font: 400 12.5px/1.55 var(--mono); font-style: normal; color: var(--ink-2); }
+
+/* ---------- Options O# ---------- */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.option { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule); }
+.option.pick { border: 1.5px solid var(--accent); }
+.option header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.option header .pill { margin-left: auto; }
+.option ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; line-height: 1.45; }
+.option li { position: relative; padding-left: 18px; }
+.option li::before { position: absolute; left: 0; font: 600 14px/1.45 var(--mono); }
+.pros li::before { content: "+"; color: var(--ok); }
+.cons li::before { content: "−"; color: var(--bad); }
+.option footer { margin-top: auto; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--rule); font: 400 12.5px var(--mono); color: var(--ink-2); }
+.option footer b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Tables: edge cases E#, matrix C#, planned vs built ---------- */
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); }
+.scroll table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+thead th { background: var(--paper); white-space: nowrap; }
+tbody th { font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td b { font-weight: 600; }
+.cases td:first-child { white-space: nowrap; }
+.tally { margin-top: -8px; font: 500 12.5px var(--mono); color: var(--ink-2); }
+.matrix th.grp { text-align: center; }
+.matrix td:nth-last-child(2), .matrix thead tr:last-child th:nth-last-child(2), .matrix thead tr:first-child th:last-child { border-left: 1.5px solid var(--line); }
+.matrix tbody th { white-space: nowrap; }
+.matrix td.y, .matrix td.n, .matrix td.any { text-align: center; font: 500 12.5px/1.45 var(--mono); }
+.matrix td.y { background: var(--accent-tint); color: var(--accent); }
+.matrix td.n { color: var(--ink-2); }
+.matrix td.any { color: var(--line); }
+
+/* ---------- Evidence ---------- */
+.evidence { background: var(--panel); border: 1px solid var(--rule); }
+.evidence summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; }
+.evidence summary::-webkit-details-marker { display: none; }
+.evidence summary::before { content: "▸"; color: var(--ink-2); }
+.evidence[open] summary::before { content: "▾"; }
+.evidence summary code { background: none; padding: 0; }
+.evidence summary .pill { margin-left: auto; }
+.evidence pre { border: 0; border-top: 1px solid var(--rule); }
+.evidence p { margin: 0; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+
+/* ---------- Questions Q# (explore) ---------- */
+.q { margin: 0; padding: 16px 18px 18px; display: grid; gap: 8px; min-width: 0; max-width: 84ch; background: var(--panel); border: 1px solid var(--rule); }
+.q > * { min-width: 0; }
+.q legend { float: left; width: 100%; padding: 0 0 2px; font: 600 16.5px/1.4 var(--body); }
+.q legend > .id:first-child { margin-right: 8px; }
+.q .why { margin: 0 0 4px; font-size: 14.5px; color: var(--ink-2); }
+.q label { position: relative; display: block; padding: 9px 12px 9px 38px; border: 1px solid var(--rule); cursor: pointer; font-size: 15px; line-height: 1.45; }
+.q label:hover { border-color: var(--line); }
+.q label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.q input[type="radio"] { position: absolute; left: 13px; top: 12px; margin: 0; accent-color: var(--accent); }
+.q em { margin-left: 8px; font: 500 11px var(--mono); font-style: normal; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.q textarea { width: 100%; min-height: 52px; margin-top: 4px; padding: 8px 10px; resize: vertical; font: 400 14px/1.5 var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.answers { display: grid; gap: 10px; justify-items: start; }
+.answers-status { margin: 0; max-width: 72ch; font-size: 14px; color: var(--ink-2); }
+.btn { padding: 10px 16px; border: 0; cursor: pointer; font: 600 14px var(--body); color: var(--panel); background: var(--accent); }
+#answers-out { width: 100%; white-space: pre-wrap; }
+
+/* ---------- Block diagram: tiers of nodes, arrows between ---------- */
+.arch, .seq {
+  margin: 0; overflow-x: auto; border: 1px solid var(--rule);
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.arch { display: grid; padding: 20px 18px; }
+.tier { display: flex; align-items: stretch; gap: 12px; padding: 14px 12px 12px; background: var(--paper); border: 1px dashed var(--line); }
+.tier::before { content: attr(data-tier); flex: 0 0 74px; align-self: center; }
+.node { position: relative; flex: 1 1 0; min-width: 120px; padding: 10px 12px; background: var(--panel); border: 1.5px solid var(--ink); font: 600 14px/1.3 var(--body); }
+.node small { display: block; margin-top: 2px; font: 400 11.5px/1.4 var(--mono); color: var(--ink-2); }
+.node::after { position: absolute; top: -8px; right: 8px; padding: 0 5px; font: 600 9.5px/15px var(--mono); letter-spacing: .08em; color: var(--panel); background: var(--c); }
+.node.new { --c: var(--accent); border-color: var(--accent); background: var(--accent-tint); }
+.node.new::after { content: "NEW"; }
+.node.chg { --c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.node.chg::after { content: "CHANGED"; }
+.node.ext { --c: var(--muted); border: 1.5px dotted var(--line); color: var(--ink-2); }
+.node.ext::after { content: "EXTERNAL"; }
+.node.gone { --c: var(--bad); border: 1.5px dashed var(--bad); color: var(--ink-2); text-decoration: line-through; }
+.node.gone::after { content: "REMOVED"; }
+.hl { flex: 0 1 auto; align-self: center; min-width: 70px; max-width: 140px; font: 500 11px/1.2 var(--mono); color: var(--ink-2); text-align: center; }
+.hl::after { content: ""; display: block; margin-top: 4px; width: 100%; height: 9px; background: var(--ink); clip-path: polygon(0 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 0 60%); }
+.hl.both::after { clip-path: polygon(0 50%, 9px 0, 9px 40%, calc(100% - 9px) 40%, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, calc(100% - 9px) 60%, 9px 60%, 9px 100%); }
+.hl.back::after { scale: -1 1; }
+.link { min-height: 44px; padding: 5px 0 5px 86px; text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.link::before { content: ""; display: inline-block; vertical-align: middle; margin-right: 10px; width: 9px; height: 34px; background: var(--ink); clip-path: polygon(40% 0, 60% 0, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px)); }
+.link.both::before { clip-path: polygon(50% 0, 100% 9px, 60% 9px, 60% calc(100% - 9px), 100% calc(100% - 9px), 50% 100%, 0 calc(100% - 9px), 40% calc(100% - 9px), 40% 9px, 0 9px); }
+.link.up::before { scale: 1 -1; }
+.arch figcaption, .seq figcaption { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; font: 500 12px var(--mono); color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); background: var(--panel); }
+.legend i.new { border-color: var(--accent); background: var(--accent-tint); }
+.legend i.chg { border: 1.5px dashed var(--warn); }
+.legend i.ext { border: 1.5px dotted var(--line); }
+.legend i.gone { border: 1.5px dashed var(--bad); }
+
+/* ---------- Sequence diagram: lifelines on a column grid ----------
+   <figure class="seq" style="--n:5">  n = actor count
+   <div class="msg" style="--from:0;--to:2">  columns are 0-based; arrow points at --to  */
+.seq { padding: 18px 14px 14px; }
+.seq-actors, .seq-body { min-width: calc(var(--n) * 136px); }
+.seq-actors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.seq-actors > * { justify-self: center; max-width: calc(100% - 12px); padding: 7px 12px; text-align: center; background: var(--panel); border: 1.5px solid var(--ink); font: 600 13.5px/1.25 var(--body); }
+.seq-actors small { display: block; margin-top: 2px; font: 400 11px var(--mono); color: var(--ink-2); }
+.seq-body { padding-block: 8px 18px; background: linear-gradient(90deg, transparent calc(50% - .75px), var(--line) calc(50% - .75px) calc(50% + .75px), transparent calc(50% + .75px)) 0 0 / calc(100% / var(--n)) 100% repeat-x; }
+.msg {
+  --lo: min(var(--from), var(--to)); --hi: max(var(--from), var(--to));
+  counter-increment: step; position: relative;
+  margin-left: calc((var(--lo) + .5) / var(--n) * 100%);
+  width: calc((var(--hi) - var(--lo)) / var(--n) * 100%);
+  padding: 12px 12px 6px; text-align: center; font: 400 13px/1.35 var(--body);
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel);
+  background: linear-gradient(var(--ink), var(--ink)) 0 100% / 100% 1.5px no-repeat;
+}
+.msg::before { content: "S" counter(step); margin-right: 6px; font: 600 10.5px var(--mono); color: var(--accent); }
+.msg::after {
+  content: ""; position: absolute; bottom: -3.75px; width: 9px; height: 9px;
+  left: calc(clamp(0, var(--to) - var(--from), 1) * 100% - 9px);
+  transform-origin: 100% 50%; scale: clamp(-1, var(--to) - var(--from), 1) 1;
+  background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.msg.reply { color: var(--ink-2); background: repeating-linear-gradient(90deg, var(--ink-2) 0 5px, transparent 5px 9px) 0 100% / 100% 1.5px no-repeat; }
+.msg.reply::after { background: var(--ink-2); clip-path: polygon(0 0, 100% 50%, 0 100%, 0 78%, 62% 50%, 0 22%); }
+.msg.self { --to: var(--from); width: auto; max-width: calc(140% / var(--n)); margin-left: calc((var(--from) + .5) / var(--n) * 100%); padding: 9px 8px 9px 24px; text-align: left; background: none; }
+.msg.self::after { left: 0; top: 7px; bottom: 7px; width: 14px; height: auto; scale: none; clip-path: none; background: none; border: 1.5px solid var(--ink); border-left: 0; }
+.seq-note { --to: var(--from); margin: 6px 0 6px calc(var(--from) / var(--n) * 100% + 10px); width: calc((var(--to) - var(--from) + 1) / var(--n) * 100% - 20px); padding: 6px 10px; background: var(--warn-tint); border: 1px solid var(--warn); font: 400 12.5px/1.4 var(--body); }
+.seq-frag { margin-block: 10px; padding-bottom: 6px; box-shadow: inset 0 0 0 1px var(--line); }
+.seq-frag::before { content: attr(data-label); display: inline-block; padding: 3px 18px 3px 10px; background: var(--rule); font: 600 11px var(--mono); clip-path: polygon(0 0, 100% 0, 100% 55%, calc(100% - 8px) 100%, 0 100%); }
+.seq-else { margin-top: 8px; padding: 3px 10px; border-top: 1px dashed var(--line); font: 600 11px var(--mono); color: var(--ink-2); }
+</style>
+<script>
+// Web fonts load without blocking the page: it renders at once in system fonts and swaps when they arrive (or stays put offline).
+for (const link of document.querySelectorAll('link[data-fonts]')) {
+  if (link.sheet) link.media = 'all';
+  else link.addEventListener('load', () => { link.media = 'all'; });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  // Sequence steps get ids S1..Sn in document order, matching the numbers the CSS counter prints.
+  document.querySelectorAll('.msg').forEach((m, i) => { m.id = 'S' + (i + 1); });
+
+  // Sheet index from section headings.
+  const toc = document.getElementById('toc');
+  const heads = [...document.querySelectorAll('main section > h2')];
+  if (toc && heads.length) {
+    toc.innerHTML = '<b>Sheet index</b>';
+    heads.forEach((h, i) => {
+      const a = document.createElement('a');
+      a.href = '#' + h.parentElement.id;
+      a.innerHTML = `<span>§${i + 1}</span>`;
+      a.append(h.firstChild.textContent.trim());
+      toc.append(a);
+    });
+  }
+
+  // Tally under edge-case and matrix tables, counted from the status pills in the last column.
+  document.querySelectorAll('table.cases, table.matrix').forEach(t => {
+    const counts = {};
+    t.querySelectorAll('tbody td:last-child .pill').forEach(p => {
+      const k = p.textContent.trim().toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const p = document.createElement('p');
+    p.className = 'tally';
+    const noun = t.classList.contains('matrix') ? 'cases' : 'edge cases';
+    p.textContent = [`${t.tBodies[0].rows.length} ${noun}`, ...Object.entries(counts).map(([k, n]) => `${n} ${k}`)].join(' · ');
+    (t.closest('.scroll') || t).after(p);
+  });
+
+  // Explore sheet: save picks as they are made so the agent can read them, and offer them as text to paste.
+  const qs = [...document.querySelectorAll('fieldset.q')];
+  const btn = document.getElementById('copy-answers');
+  const out = document.getElementById('answers-out');
+  const status = document.getElementById('answers-status');
+  const say = text => { if (status) status.textContent = text; };
+  const labelOf = input => {
+    if (!input) return '';
+    const label = input.closest('label').cloneNode(true);
+    label.querySelector('em')?.remove();
+    return label.textContent.replace(/\s+/g, ' ').trim();
+  };
+  const noteOf = q => q.querySelector('textarea')?.value.trim() || '';
+  const answersText = () => qs.map(q => {
+    const pick = labelOf(q.querySelector('input:checked')) || '(no pick)';
+    return `${q.id}: ${pick}${noteOf(q) ? ` | note: ${noteOf(q)}` : ''}`;
+  }).join('\n');
+  const collect = () => ({
+    sheet: 'explore',
+    answers: Object.fromEntries(qs.map(q => {
+      const pick = q.querySelector('input:checked');
+      return [q.id, { option: pick ? pick.id || pick.value : '', label: labelOf(pick), note: noteOf(q) }];
+    })),
+    text: answersText(),
+    savedAt: new Date().toISOString(),
+  });
+  const restore = saved => {
+    for (const q of qs) {
+      const a = saved?.answers?.[q.id];
+      if (!a) continue;
+      const pick = [...q.querySelectorAll('input[type=radio]')].find(i => (i.id || i.value) === a.option);
+      if (pick) pick.checked = true;
+      const note = q.querySelector('textarea');
+      if (note && typeof a.note === 'string') note.value = a.note;
+    }
+  };
+  // Where picks are kept: the Claude artifact's database, a Blueprint serve.py server (answers.json), or this browser.
+  async function answerStore() {
+    const db = window.claude?.use ? await window.claude.use('db').catch(() => null) : null;
+    if (db) {
+      const ref = db.doc('answers/explore');
+      return { where: 'db', load: async () => (await ref.get()).data(), save: doc => ref.set(doc) };
+    }
+    if (location.protocol.startsWith('http')) try {
+      const probe = await fetch('answers', { cache: 'no-store' });
+      if (probe.ok && probe.headers.get('X-Blueprint') === '1') {
+        return {
+          where: 'file',
+          load: () => probe.json(),
+          save: async doc => {
+            const r = await fetch('answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+          },
+        };
+      }
+    } catch { /* not served by serve.py */ }
+    const key = `blueprint:answers:${location.pathname}`;
+    return {
+      where: 'browser',
+      load: () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+      save: async doc => { try { localStorage.setItem(key, JSON.stringify(doc)); } catch { /* storage blocked */ } },
+    };
+  }
+  if (qs.length) {
+    const hints = {
+      db: 'Your picks save to this page as you choose them. Claude reads them when you run decide.',
+      file: 'Your picks save to answers.json in this record as you choose them. The agent reads them when you run decide.',
+      browser: 'Your picks are kept in this browser only. When you are done, press Copy answers and paste them into the chat.',
+    };
+    answerStore().then(async store => {
+      const saved = await Promise.resolve().then(store.load).catch(() => null);
+      if (saved) restore(saved);
+      say(saved ? `${hints[store.where]} Your last picks are restored.` : hints[store.where]);
+      let timer;
+      let queue = Promise.resolve();
+      const save = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          queue = queue.then(() => store.save(collect())).then(
+            () => say(store.where === 'browser' ? hints.browser : `Saved at ${new Date().toLocaleTimeString()}. Run decide when you're done.`),
+            e => say(`Couldn't save your picks (${e?.message || e?.code || e}). Press Copy answers and paste them into the chat.`));
+        }, 400);
+      };
+      for (const q of qs) {
+        q.addEventListener('change', save);
+        q.addEventListener('input', save);
+      }
+    });
+  }
+  if (btn && out) btn.addEventListener('click', () => {
+    out.textContent = answersText();
+    out.hidden = false;
+    (navigator.clipboard?.writeText(out.textContent) ?? Promise.reject())
+      .then(() => { btn.textContent = 'Copied. Paste it into the chat'; })
+      .catch(() => { getSelection().selectAllChildren(out); btn.textContent = 'Selected. Copy with ⌘C or Ctrl+C'; });
+  });
+});
+</script>
+</head>
+<body>
+<div class="sheet">
+<nav id="toc" aria-label="Sheet index"></nav>
+<main>
+<header class="tb">
+  <div class="tb-title">
+    <span class="tb-no">ADR-0001 · list-json</span>
+    <h1>Machine-readable <code>todo list --json</code></h1>
+  </div>
+  <div class="tb-sheet"><span>Sheet</span><b>1<small>/3</small></b></div>
+  <dl class="tb-meta">
+    <div><dt>Status</dt><dd><span class="pill info">Exploring</span></dd></div>
+    <div><dt>Date</dt><dd>2026-10-01</dd></div>
+    <div><dt>Owner</dt><dd>Navaneeth Sharma</dd></div>
+    <div><dt>Rev</dt><dd>A</dd></div>
+    <div><dt>Repo</dt><dd>claude-lifecycle</dd></div>
+    <div><dt>Published</dt><dd>not yet (local file)</dd></div>
+  </dl>
+  <ol class="tb-phases">
+    <li class="now"><span>Explore</span><small>5 questions waiting</small></li>
+    <li><span>Decide</span><small>ADR after answers</small></li>
+    <li><span>Build</span><small>verify E1–E12</small></li>
+  </ol>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <dl class="tldr">
+    <div><dt>Problem</dt><dd><code>todo list</code> prints padded text with no escaping, so scripts have to scrape columns. A title that contains a newline creates a fake row (<a class="id" href="#F2">F2</a>), and ids of 1000 or more shift the columns (<a class="id" href="#F3">F3</a>).</dd></div>
+    <div><dt>Why now</dt><dd>Shell scripts need to read the list reliably. Today the only other way is to read <code>~/.todo.store</code> directly, and that file is internal storage that nothing documents (<a class="id" href="#F5">F5</a>).</dd></div>
+    <div><dt>Leaning</dt><dd><a class="id" href="#O1">O1</a>: <code>todo list --json</code> prints <code>json.dumps(items)</code>, a compact JSON array of <code>{id, title, done}</code>. Output without the flag stays byte-for-byte the same. About 3 lines of code plus one test.</dd></div>
+  </dl>
+</section>
+
+<section id="micro">
+  <h2>Micro features</h2>
+  <ol class="ledger">
+    <li id="M1"><span class="id">M1</span><div><p class="stmt"><code>todo list --json</code> writes every item to stdout as JSON and exits 0.</p><p class="meta">depends on nothing · size S · one file (<code>todo/cli.py</code>) plus a test and a README line</p></div></li>
+  </ol>
+  <p class="callout"><b>One micro feature</b>This is a small change, so there is only M1 and the tables below have no M# column. If you pick <a class="id" href="#Q4">Q4</a> B or C, <code>add</code>/<code>done</code> output becomes M2.</p>
+</section>
+
+<section id="current">
+  <h2>Current state</h2>
+  <figure class="arch">
+    <div class="tier" data-tier="Caller">
+      <div class="node ext">Shell script<small>scrapes text with awk / cut</small></div>
+    </div>
+    <div class="link">python3 -m todo list</div>
+    <div class="tier" data-tier="CLI">
+      <div class="node chg">cli.py main()<small>argparse · formats each row · cli.py:8–35</small></div>
+    </div>
+    <div class="link">store.load()</div>
+    <div class="tier" data-tier="Store">
+      <div class="node">store.py<small>load() / save() · store.py:11–17</small></div>
+      <span class="hl both">read_text / write_text</span>
+      <div class="node">~/.todo.store<small>JSON array · or $TODO_FILE</small></div>
+    </div>
+    <figcaption>
+      <div class="legend"><span><i class="chg"></i>where O1 would change code</span><span><i></i>unchanged</span><span><i class="ext"></i>external</span></div>
+      The data is already JSON on disk (<a class="id" href="#F4">F4</a>). It turns into text only at the last step, in <code>cli.py</code>.
+    </figcaption>
+  </figure>
+  <figure class="seq" style="--n:4">
+    <div class="seq-actors">
+      <b>Shell script<small>external</small></b><b>cli.py</b><b>store.py</b><b>~/.todo.store</b>
+    </div>
+    <div class="seq-body">
+      <div class="msg" style="--from:0;--to:1"><code>todo list</code></div>
+      <div class="msg self" style="--from:1">argparse → cmd = list</div>
+      <div class="msg" style="--from:1;--to:2">load()</div>
+      <div class="msg" style="--from:2;--to:3">read_text()</div>
+      <div class="msg reply" style="--from:3;--to:2">JSON text</div>
+      <div class="msg reply" style="--from:2;--to:1">list of <code>{id, title, done}</code></div>
+      <div class="msg reply" style="--from:1;--to:0"><code>  1  [x]  buy milk</code>, one line per item</div>
+      <div class="msg self" style="--from:0">split into columns</div>
+      <div class="seq-frag" data-label="alt · a title contains a newline">
+        <div class="msg reply" style="--from:1;--to:0"><code>  2  [ ]  line one</code></div>
+        <div class="msg reply" style="--from:1;--to:0"><code>  9  [x]  forged</code></div>
+        <div class="seq-note" style="--from:0;--to:1">The script reads a finished item 9 that doesn't exist (<a class="id" href="#F2">F2</a>).</div>
+        <div class="seq-else">else · store file is empty or corrupt</div>
+        <div class="msg reply" style="--from:2;--to:1">JSONDecodeError</div>
+        <div class="msg reply" style="--from:1;--to:0">traceback on stderr · exit 1 · stdout empty</div>
+      </div>
+    </div>
+    <figcaption>How <code>todo list</code> works today: the happy path, then the forged-row and corrupt-store branches. All of it was observed by running the CLI with a scratch <code>$TODO_FILE</code>.</figcaption>
+  </figure>
+</section>
+
+<section id="findings">
+  <h2>Findings</h2>
+  <ol class="ledger">
+    <li id="F1"><span class="id">F1</span><div><p>The plain format is <code>f"{item['id']:>3}  [{mark}]  {item['title']}"</code>, printed once per item. Titles are not escaped or quoted.</p><cite>todo/cli.py:32–34 · high confidence</cite></div></li>
+    <li id="F2"><span class="id">F2</span><div><p>A title containing <code>\n</code> prints as several lines. <code>todo add $'line one\n  9  [x]  forged'</code> produced a line exactly like a real finished item 9. Parsing the text output is unsafe, not just fragile.</p><cite>ran it: <code>python3 -m todo list | od -c</code> · high confidence</cite></div></li>
+    <li id="F3"><span class="id">F3</span><div><p>The id column is padded to width 3. Id 1000 prints as <code>1000  [ ]  big</code>, so scripts that cut fixed columns break, while scripts that split on whitespace keep working.</p><cite>todo/cli.py:34 · ran it · high confidence</cite></div></li>
+    <li id="F4"><span class="id">F4</span><div><p>The store already holds the target shape: a JSON array of <code>{"id": int, "title": str, "done": bool}</code>. It is written with <code>json.dumps(indent=2)</code>, which by default escapes non-ASCII as <code>é</code>. <code>add</code> is the only thing that creates items, so every item has exactly these three keys.</p><cite>todo/store.py:13,17 · todo/cli.py:19 · high confidence</cite></div></li>
+    <li id="F5"><span class="id">F5</span><div><p>A script could run <code>jq . ~/.todo.store</code> today. That ties it to the storage path (<code>$TODO_FILE</code> or <code>~/.todo.store</code>) and the storage format, and neither is documented: the README lists only the three commands.</p><cite>todo/store.py:1,8 · README.md:5–7 · high confidence</cite></div></li>
+    <li id="F6"><span class="id">F6</span><div><p>The <code>list</code> subparser takes no arguments. Both <code>todo list --json</code> and <code>todo --json list</code> exit 2 today with <code>error: unrecognized arguments: --json</code>. That lets a script tell an old version from a new one.</p><cite>todo/cli.py:12 · ran it · high confidence</cite></div></li>
+    <li id="F7"><span class="id">F7</span><div><p>If the store file is zero bytes or corrupt, <code>store.load()</code> raises <code>JSONDecodeError</code>: a traceback on stderr, exit 1, nothing on stdout. Every command goes through this path. <code>save()</code> is a plain <code>write_text</code>, not atomic, so a reader running during a write could see a partly written file.</p><cite>todo/store.py:13,17 · ran it · high confidence</cite></div></li>
+    <li id="F8"><span class="id">F8</span><div><p>The tests already capture stdout and the exit code (<code>run_cli</code>), and one test pins the plain format <code>[x]  buy milk</code>. A <code>--json</code> test fits next to it. No new dependency is needed: the stdlib <code>json</code> module covers it (Python 3.12), and <code>jq</code> is at <code>/usr/bin/jq</code> for manual checks.</p><cite>tests/test_cli.py:21–32 · high confidence</cite></div></li>
+  </ol>
+</section>
+
+<section id="options">
+  <h2>Options</h2>
+  <div class="options">
+    <article class="option pick" id="O1">
+      <header><span class="id">O1</span><h3><code>--json</code> → JSON array</h3><span class="pill info">leaning</span></header>
+      <ul class="pros"><li>One line: <code>print(json.dumps(items))</code></li><li>Escaping fixes <a class="id" href="#F2">F2</a> and <a class="id" href="#F3">F3</a></li><li>Same shape as the store (<a class="id" href="#F4">F4</a>), and <code>jq '.[]'</code> works on it directly</li></ul>
+      <ul class="cons"><li>The output shape is tied to the store shape, so new store fields show up in the output</li><li>You need jq or similar to read it in shell</li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+    <article class="option" id="O2">
+      <header><span class="id">O2</span><h3><code>--json</code> → JSON Lines</h3><span class="pill">alternative</span></header>
+      <ul class="pros"><li>One object per line: <code>while read -r</code> and <code>grep</code> work on it</li><li>Streams well for long lists</li></ul>
+      <ul class="cons"><li>An empty list prints nothing, which looks like a failure unless the script checks the exit code</li><li>Not what people usually expect from a flag named <code>--json</code></li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+    <article class="option" id="O3">
+      <header><span class="id">O3</span><h3><code>--format text|json</code></h3><span class="pill">alternative</span></header>
+      <ul class="pros"><li>Leaves room for csv or tsv later</li></ul>
+      <ul class="cons"><li>Speculative: nobody has asked for a second format</li><li>More to type, plus a choices check</li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>low</b></span></footer>
+    </article>
+    <article class="option" id="O4">
+      <header><span class="id">O4</span><h3><code>--porcelain</code> tab-separated</h3><span class="pill">alternative</span></header>
+      <ul class="pros"><li>No jq needed: <code>IFS=$'\t' read -r id done title</code></li></ul>
+      <ul class="cons"><li>A tab or newline in a title still breaks it unless we invent and document escaping rules, so it brings back <a class="id" href="#F2">F2</a></li></ul>
+      <footer><span>Effort <b>S</b></span><span>Risk <b>medium</b></span></footer>
+    </article>
+  </div>
+</section>
+
+<section id="edge-cases">
+  <h2>Edge cases</h2>
+  <div class="scroll"><table class="cases">
+    <thead><tr><th>ID</th><th>Scenario</th><th>Expected behaviour</th><th>Handled by</th><th>Sev</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr id="E1"><td><span class="id">E1</span></td><td><b>First run, no store file</b></td><td>stdout <code>[]</code> plus a newline, exit 0. Today plain <code>list</code> prints nothing.</td><td><a class="id" href="#O1">O1</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E2"><td><span class="id">E2</span></td><td><b>One item</b><br><code>add "buy milk"</code></td><td><code>[{"id": 1, "title": "buy milk", "done": false}]</code>, exit 0</td><td><a class="id" href="#Q1">Q1</a> <a class="id" href="#Q2">Q2</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E3"><td><span class="id">E3</span></td><td><b>Newline in a title</b><br><code>$'line one\n  9  [x]  forged'</code></td><td>One array element whose title is <code>"line one\n  9  [x]  forged"</code>. <code>jq length</code> equals the real item count.</td><td><a class="id" href="#F2">F2</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E4"><td><span class="id">E4</span></td><td><b>Quotes, backslash, tab, empty title</b><br><code>'say "hi" \ ok'</code>, <code>$'a\tb'</code>, <code>""</code></td><td>Escaped as <code>\"</code>, <code>\\</code>, <code>\t</code>, and <code>""</code>. <code>jq -r '.[i].title'</code> gives back the original string.</td><td><a class="id" href="#O1">O1</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E5"><td><span class="id">E5</span></td><td><b>Unicode title</b><br><code>café ☕</code></td><td><code>"café ☕"</code> with Q3 A, raw UTF-8 with Q3 B. Either way <code>jq -r</code> prints <code>café ☕</code>.</td><td><a class="id" href="#Q3">Q3</a></td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E6"><td><span class="id">E6</span></td><td><b>Id 1000 or more</b></td><td><code>"id": 1000</code> as a JSON integer with no padding</td><td><a class="id" href="#F3">F3</a></td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E7"><td><span class="id">E7</span></td><td><b>Finished and open items together</b></td><td><code>"done": true</code> / <code>false</code> as JSON booleans, not <code>"x"</code></td><td><a class="id" href="#F4">F4</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E8"><td><span class="id">E8</span></td><td><b>Flag before the subcommand</b><br><code>todo --json list</code></td><td>Exit 2, <code>unrecognized arguments: --json</code>, same as today. With Q4 C it works instead.</td><td><a class="id" href="#Q4">Q4</a> <a class="id" href="#F6">F6</a></td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E9"><td><span class="id">E9</span></td><td><b>No flag</b><br><code>todo list</code></td><td>Output is byte-for-byte what it is today, and <code>test_add_list_done</code> still passes</td><td><a class="id" href="#F1">F1</a></td><td><span class="sev high">high</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E10"><td><span class="id">E10</span></td><td><b>Script runs against an old version</b></td><td>Exit 2, usage on stderr, stdout empty. The script can detect this and stop, so it never parses garbage.</td><td><a class="id" href="#F6">F6</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E11"><td><span class="id">E11</span></td><td><b>Store is zero bytes or corrupt</b></td><td>Exit 1, stdout empty (never half-written JSON). With Q5 A stderr gets a traceback; with Q5 B it gets <code>todo: cannot read &lt;path&gt;: …</code></td><td><a class="id" href="#Q5">Q5</a> <a class="id" href="#F7">F7</a></td><td><span class="sev med">med</span></td><td><span class="pill">open</span></td></tr>
+      <tr id="E12"><td><span class="id">E12</span></td><td><b><code>add</code> runs during <code>list --json</code></b></td><td>The reader sees either the old list or the new one, or, rarely, a partly written file, which ends up as E11. This race exists today and the change doesn't make it worse.</td><td><a class="id" href="#F7">F7</a></td><td><span class="sev low">low</span></td><td><span class="pill">open</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="risks">
+  <h2>Risks and unknowns</h2>
+  <div class="callout risk"><b>Contract</b><p>Once scripts depend on <code>--json</code>, its shape is a public contract. With <a class="id" href="#Q2">Q2</a> A, any field added to the store later shows up in the output too. Adding fields is safe for jq users; renaming or removing one would break them.</p></div>
+  <div class="callout risk"><b>Existing, not new</b><p><code>save()</code> is not atomic and a corrupt store ends in a traceback (<a class="id" href="#F7">F7</a>). Scripts that poll <code>list --json</code> will hit this more often than a person typing commands would. Fixing it is a separate change unless <a class="id" href="#Q5">Q5</a> B pulls part of it in.</p></div>
+  <div class="callout risk"><b>Unknown</b><p>Whether the scripts that will consume this can rely on <code>jq</code>. If they can't, JSON Lines (<a class="id" href="#O2">O2</a>) or tab-separated output (<a class="id" href="#O4">O4</a>) matter more.</p></div>
+</section>
+
+<section id="questions">
+  <h2>Questions for you</h2>
+  <fieldset class="q" id="Q1">
+    <legend><span class="id">Q1</span>What shape should <code>--json</code> output have?</legend>
+    <p class="why">This is the contract scripts will depend on. Hard to change once it ships.</p>
+    <label><input type="radio" name="Q1" id="Q1-A" checked> A. A single JSON array of items (<a class="id" href="#O1">O1</a>) <em>recommended</em></label>
+    <label><input type="radio" name="Q1" id="Q1-B"> B. JSON Lines, one object per line (<a class="id" href="#O2">O2</a>)</label>
+    <label><input type="radio" name="Q1" id="Q1-C"> C. A wrapper object: <code>{"version": 1, "items": [...]}</code></label>
+    <textarea id="Q1-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q2">
+    <legend><span class="id">Q2</span>Which fields does each item carry?</legend>
+    <p class="why">Decides whether the output follows the store or stays fixed if the store gains fields (<a class="id" href="#F4">F4</a>).</p>
+    <label><input type="radio" name="Q2" id="Q2-A" checked> A. Pass store items through unchanged (today that means <code>id</code>, <code>title</code>, <code>done</code>) <em>recommended</em></label>
+    <label><input type="radio" name="Q2" id="Q2-B"> B. Build exactly <code>{id, title, done}</code> per item, so internal fields never leak</label>
+    <textarea id="Q2-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q3">
+    <legend><span class="id">Q3</span>How should the JSON be formatted?</legend>
+    <p class="why">Affects how it reads in a terminal and how it behaves when stdout isn't UTF-8 (<a class="id" href="#E5">E5</a>). jq reads all three.</p>
+    <label><input type="radio" name="Q3" id="Q3-A" checked> A. Compact, one line, non-ASCII escaped: <code>json.dumps(items)</code> <em>recommended</em></label>
+    <label><input type="radio" name="Q3" id="Q3-B"> B. Compact, raw UTF-8: <code>ensure_ascii=False</code></label>
+    <label><input type="radio" name="Q3" id="Q3-C"> C. Indented, like the store: <code>indent=2</code></label>
+    <textarea id="Q3-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q4">
+    <legend><span class="id">Q4</span>Which commands get <code>--json</code>?</legend>
+    <p class="why">Scope. <code>add</code> already prints just the new id, which scripts can read as is.</p>
+    <label><input type="radio" name="Q4" id="Q4-A" checked> A. Only <code>list</code> <em>recommended</em></label>
+    <label><input type="radio" name="Q4" id="Q4-B"> B. <code>list</code>, <code>add</code> (<code>{"id": n}</code>) and <code>done</code>; adds M2</label>
+    <label><input type="radio" name="Q4" id="Q4-C"> C. A global flag, <code>todo --json &lt;cmd&gt;</code>; adds M2</label>
+    <textarea id="Q4-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <fieldset class="q" id="Q5">
+    <legend><span class="id">Q5</span>What should happen when the store is corrupt?</legend>
+    <p class="why">Scripts already get exit 1 and an empty stdout. The only question is whether stderr is a traceback or one readable line (<a class="id" href="#F7">F7</a>).</p>
+    <label><input type="radio" name="Q5" id="Q5-A" checked> A. Leave it as today; out of scope <em>recommended</em></label>
+    <label><input type="radio" name="Q5" id="Q5-B"> B. Catch <code>JSONDecodeError</code> in <code>store.load()</code> and print <code>todo: cannot read &lt;path&gt;: …</code> with exit 1, for every command</label>
+    <textarea id="Q5-note" placeholder="Another answer, or notes"></textarea>
+  </fieldset>
+  <div class="answers"><p class="answers-status" id="answers-status"></p>
+    <button class="btn" id="copy-answers" type="button">Copy answers</button>
+    <pre id="answers-out" hidden></pre>
+  </div>
+</section>
+</main>
+</div>
+</body>
+</html>
